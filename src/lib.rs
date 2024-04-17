@@ -53,7 +53,6 @@ pub fn deswizzle_surface(
                 // TODO: How many of these fields are set from functions?
                 // TODO: Find a way to get values used from cemu to create test cases?
                 let p_in = AddrComputeSurfaceAddrFromCoordInput {
-                    size: 0, // TODO: is this important?
                     x,
                     y,
                     slice: z,
@@ -69,7 +68,6 @@ pub fn deswizzle_surface(
                     comp_bits,
                     pipe_swizzle,
                     bank_swizzle,
-                    num_frags: 0, // TODO: unused?
                 };
 
                 let address = addrlib::dispatch_compute_surface_addrfrom_coord(&p_in) as usize;

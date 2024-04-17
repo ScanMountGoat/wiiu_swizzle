@@ -1,6 +1,5 @@
 // TODO: Fix names.
 // TODO: Preserve enum variant names?
-// TODO: Doc comments and corresponding gx2 types?
 
 // These are class member variables in addrlib.
 // Values taken from Cemu.
@@ -57,10 +56,10 @@ pub enum AddrTileType {
     ADDR_THICK_TILING = 0x3,
 }
 
+// Modified to remove unused fields.
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/include/addrlib/addrinterface.h#L343
 #[derive(Debug)]
 pub struct AddrComputeSurfaceAddrFromCoordInput {
-    pub size: u32,
     pub x: u32,
     pub y: u32,
     pub slice: u32,
@@ -76,12 +75,6 @@ pub struct AddrComputeSurfaceAddrFromCoordInput {
     pub comp_bits: u32,
     pub pipe_swizzle: u32,
     pub bank_swizzle: u32,
-    pub num_frags: u32,
-    // pub tile_type: AddrTileType,
-    //    ignoreSE: bool,
-    //     _pad: u32,
-    //    ADDR_TILEINFO *pTileInfo;
-    //    int32_t tileIndex;
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/core/addrcommon.h#L50
@@ -117,12 +110,12 @@ fn compute_pixel_index_within_micro_tile(
     tile_mode: AddrTileMode,
     tile_type: AddrTileType,
 ) -> u32 {
-    let mut pixel_bit0 = 0;
-    let mut pixel_bit1 = 0;
-    let mut pixel_bit2 = 0;
-    let mut pixel_bit3 = 0;
-    let mut pixel_bit4 = 0;
-    let mut pixel_bit5 = 0;
+    let pixel_bit0;
+    let pixel_bit1;
+    let pixel_bit2;
+    let pixel_bit3;
+    let pixel_bit4;
+    let pixel_bit5;
     let mut pixel_bit6 = 0;
     let mut pixel_bit7 = 0;
     let mut pixel_bit8 = 0;
@@ -211,7 +204,7 @@ fn compute_pixel_index_within_micro_tile(
         pixel_bit8 = z2;
     }
 
-    let pixel_number = (pixel_bit0)
+    (pixel_bit0)
         | (pixel_bit1 << 1)
         | (pixel_bit2 << 2)
         | (pixel_bit3 << 3)
@@ -219,15 +212,11 @@ fn compute_pixel_index_within_micro_tile(
         | (pixel_bit5 << 5)
         | (pixel_bit6 << 6)
         | (pixel_bit7 << 7)
-        | (pixel_bit8 << 8);
-
-    return pixel_number;
+        | (pixel_bit8 << 8)
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L421
 fn compute_surface_rotation_from_tile_mode(tile_mode: AddrTileMode) -> u32 {
-    let rotate;
-
     match tile_mode {
         AddrTileMode::ADDR_TM_2D_TILED_THIN1
         | AddrTileMode::ADDR_TM_2D_TILED_THIN2
@@ -236,28 +225,22 @@ fn compute_surface_rotation_from_tile_mode(tile_mode: AddrTileMode) -> u32 {
         | AddrTileMode::ADDR_TM_2B_TILED_THIN1
         | AddrTileMode::ADDR_TM_2B_TILED_THIN2
         | AddrTileMode::ADDR_TM_2B_TILED_THIN4
-        | AddrTileMode::ADDR_TM_2B_TILED_THICK => {
-            rotate = M_PIPES * ((M_BANKS >> 1) - 1);
-        }
+        | AddrTileMode::ADDR_TM_2B_TILED_THICK => M_PIPES * ((M_BANKS >> 1) - 1),
         AddrTileMode::ADDR_TM_3D_TILED_THIN1
         | AddrTileMode::ADDR_TM_3D_TILED_THICK
         | AddrTileMode::ADDR_TM_3B_TILED_THIN1
         | AddrTileMode::ADDR_TM_3B_TILED_THICK => {
             if M_PIPES >= 4 {
-                rotate = (M_PIPES >> 1) - 1;
+                (M_PIPES >> 1) - 1
             } else {
-                rotate = 1;
+                1
             }
         }
-        _ => {
-            rotate = 0;
-        }
+        _ => 0,
     }
-
-    return rotate;
 }
 
-// https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L606
+// https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/core/addrlib.cpp#L606
 fn compute_surface_addr_from_coord_linear(
     x: u32,
     y: u32,
@@ -268,7 +251,13 @@ fn compute_surface_addr_from_coord_linear(
     height: u32,
     num_slices: u32,
 ) -> u32 {
-    todo!()
+    let slice_size = pitch * height;
+
+    let slice_offset = slice_size * (slice + sample * num_slices);
+    let row_offset = y * pitch;
+    let pix_offset = x;
+
+    (slice_offset + row_offset + pix_offset) * bpp / 8
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L750
@@ -329,10 +318,6 @@ fn compute_surface_bank_swapped_width(
         slices_per_tile = std::cmp::max(1, num_samples / samples_per_tile);
     }
 
-    // if (pSlicesPerTile) {
-    //    *pSlicesPerTile = slicesPerTile;
-    // }
-
     let mut num_samples = num_samples;
     if is_thick_macro_tiled(tile_mode) {
         num_samples = 4;
@@ -355,7 +340,7 @@ fn compute_surface_bank_swapped_width(
         }
     }
 
-    return bank_swap_width;
+    bank_swap_width
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L1384
@@ -410,16 +395,14 @@ fn compute_surface_addr_from_coord_micro_tiled(
 
     pixel_offset /= 8;
 
-    return pixel_offset + micro_tile_offset + slice_offset;
+    pixel_offset + micro_tile_offset + slice_offset
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L1464
 fn compute_pipe_from_coord_wo_rotation(x: u32, y: u32) -> u32 {
-    let mut pipe;
     let mut pipe_bit0 = 0;
     let mut pipe_bit1 = 0;
     let mut pipe_bit2 = 0;
-    // let pipe_bit3 = 0;
 
     let x3 = bit(x, 3);
     let x4 = bit(x, 4);
@@ -444,13 +427,10 @@ fn compute_pipe_from_coord_wo_rotation(x: u32, y: u32) -> u32 {
             pipe_bit1 = y4 ^ x5 ^ x4;
             pipe_bit2 = y5 ^ x3;
         }
-        _ => {
-            pipe = 0;
-        }
+        _ => (),
     }
 
-    pipe = pipe_bit0 | (pipe_bit1 << 1) | (pipe_bit2 << 2);
-    return pipe;
+    pipe_bit0 | (pipe_bit1 << 1) | (pipe_bit2 << 2)
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L1517
