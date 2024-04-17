@@ -22,6 +22,7 @@ const MICRO_TILE_PIXELS: u32 = MICRO_TILE_WIDTH * MICRO_TILE_HEIGHT;
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/include/addrlib/addrtypes.h
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AddrTileMode {
     ADDR_TM_LINEAR_GENERAL = 0x0,
     ADDR_TM_LINEAR_ALIGNED = 0x1,

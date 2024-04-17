@@ -5,6 +5,7 @@ pub use addrlib::AddrTileMode;
 mod addrlib;
 
 // TODO: Docs and examples.
+/// Untile all the array layers and mipmaps in `source` to a combined vector.
 pub fn deswizzle_surface(
     width: u32,
     height: u32,
@@ -15,6 +16,75 @@ pub fn deswizzle_surface(
     tile_mode: AddrTileMode,
     bytes_per_pixel: u32,
 ) -> Vec<u8> {
+    let mut output = vec![
+        0u8;
+        width as usize
+            * height as usize
+            * depth_or_array_layers as usize
+            * bytes_per_pixel as usize
+    ];
+
+    swizzle_surface_inner::<false>(
+        width,
+        height,
+        depth_or_array_layers,
+        source,
+        &mut output,
+        swizzle,
+        pitch,
+        tile_mode,
+        bytes_per_pixel,
+    );
+
+    output
+}
+
+/// Tile all the array layers and mipmaps in `source` to a combined vector.
+pub fn swizzle_surface(
+    width: u32,
+    height: u32,
+    depth_or_array_layers: u32,
+    source: &[u8],
+    swizzle: u32,
+    pitch: u32,
+    tile_mode: AddrTileMode,
+    bytes_per_pixel: u32,
+) -> Vec<u8> {
+    // TODO: Is this the correct output size?
+    let mut output = vec![
+        0u8;
+        width as usize
+            * height as usize
+            * depth_or_array_layers as usize
+            * bytes_per_pixel as usize
+    ];
+
+    swizzle_surface_inner::<true>(
+        width,
+        height,
+        depth_or_array_layers,
+        source,
+        &mut output,
+        swizzle,
+        pitch,
+        tile_mode,
+        bytes_per_pixel,
+    );
+
+    output
+}
+
+fn swizzle_surface_inner<const SWIZZLE: bool>(
+    width: u32,
+    height: u32,
+    depth_or_array_layers: u32,
+    source: &[u8],
+    output: &mut [u8],
+    swizzle: u32,
+    pitch: u32,
+    tile_mode: AddrTileMode,
+    bytes_per_pixel: u32,
+) {
     // TODO: validate dimensions?
     // TODO: surface info to fill in these params?
     // TODO: rounding or padding of dimensions?
@@ -36,14 +106,6 @@ pub fn deswizzle_surface(
     // TODO: only the input pin values matter?
     // TODO: cemu uses this structure as well?
     // TODO: should these define the public API?
-
-    let mut output = vec![
-        0u8;
-        width as usize
-            * height as usize
-            * depth_or_array_layers as usize
-            * bytes_per_pixel as usize
-    ];
 
     // TODO: array layers?
     // TODO: Is it correct to use depth as slices?
@@ -73,13 +135,17 @@ pub fn deswizzle_surface(
                 let address = addrlib::dispatch_compute_surface_addrfrom_coord(&p_in) as usize;
                 let linear_address =
                     ((z * width * height + y * width + x) * bytes_per_pixel) as usize;
-                output[linear_address..linear_address + bytes_per_pixel as usize]
-                    .copy_from_slice(&source[address..address + bytes_per_pixel as usize]);
+                if SWIZZLE {
+                    output[address..address + bytes_per_pixel as usize].copy_from_slice(
+                        &source[linear_address..linear_address + bytes_per_pixel as usize],
+                    );
+                } else {
+                    output[linear_address..linear_address + bytes_per_pixel as usize]
+                        .copy_from_slice(&source[address..address + bytes_per_pixel as usize]);
+                }
             }
         }
     }
-
-    output
 }
 
 #[cfg(test)]
