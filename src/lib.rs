@@ -1,4 +1,6 @@
-// TODO: module docs
+//! # wiiu_swizzle
+//! wiiu_swizzle is a CPU implementation of memory tiling
+//! for texture surfaces for the Wii U GPU hardware.
 use addrlib::AddrComputeSurfaceAddrFromCoordInput;
 pub use addrlib::AddrTileMode;
 
@@ -6,6 +8,9 @@ mod addrlib;
 
 // TODO: Docs and examples.
 /// Untile all the array layers and mipmaps in `source` to a combined vector.
+///
+/// For block compressed formats, `width` and `height` should be the dimensions in blocks
+/// with `bytes_per_pixel` being the size of a block in bytes.
 pub fn deswizzle_surface(
     width: u32,
     height: u32,
@@ -40,6 +45,9 @@ pub fn deswizzle_surface(
 }
 
 /// Tile all the array layers and mipmaps in `source` to a combined vector.
+///
+/// For block compressed formats, `width` and `height` should be the dimensions in blocks
+/// with `bytes_per_pixel` being the size of a block in bytes.
 pub fn swizzle_surface(
     width: u32,
     height: u32,
