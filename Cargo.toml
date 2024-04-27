@@ -1,6 +1,11 @@
 [package]
 name = "wiiu_swizzle"
 version = "0.1.0"
+authors = ["ScanMountGoat <>"]
+description = "Wii U texture memory tiling"
+license = "MIT"
+documentation = "https://docs.rs/wiiu_swizzle"
+repository = "https://github.com/ScanMountGoat/wiiu_swizzle"
 edition = "2021"
 
 [dependencies]
