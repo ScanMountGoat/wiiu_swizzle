@@ -1,4 +1,7 @@
-# wiiu_swizzle
+# wiiu_swizzle 
+
+[![Latest Version](https://img.shields.io/crates/v/wiiu_swizzle.svg)](https://crates.io/crates/wiiu_swizzle) [![docs.rs](https://docs.rs/wiiu_swizzle/badge.svg)](https://docs.rs/wiiu_swizzle)
+
 A safe and efficient pure Rust implementation of texture memory tiling for the Wii U. This library is still experimental and missing important features.
 
 ## Credits
