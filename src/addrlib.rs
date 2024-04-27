@@ -53,7 +53,7 @@ pub enum AddrTileMode {
 pub enum AddrTileType {
     ADDR_DISPLAYABLE = 0x0,
     ADDR_NON_DISPLAYABLE = 0x1,
-    ADDR_DEPTH_SAMPLE_ORDER = 0x2,
+    // ADDR_DEPTH_SAMPLE_ORDER = 0x2,
     ADDR_THICK_TILING = 0x3,
 }
 
