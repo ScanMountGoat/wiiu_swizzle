@@ -6,6 +6,33 @@ pub use addrlib::AddrTileMode;
 
 mod addrlib;
 
+/// Errors than can occur while tiling or untiling.
+#[derive(Debug)]
+pub enum SwizzleError {
+    /// The source data does not contain enough bytes.
+    NotEnoughData {
+        expected_size: usize,
+        actual_size: usize,
+    },
+}
+
+impl std::fmt::Display for SwizzleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SwizzleError::NotEnoughData {
+                expected_size,
+                actual_size,
+            } => write!(
+                f,
+                "Not enough data. Expected {} bytes but found {} bytes.",
+                expected_size, actual_size
+            ),
+        }
+    }
+}
+
+impl std::error::Error for SwizzleError {}
+
 // TODO: Docs and examples.
 /// Untile all the array layers and mipmaps in `source` to a combined vector.
 ///
@@ -20,7 +47,23 @@ pub fn deswizzle_surface(
     pitch: u32,
     tile_mode: AddrTileMode,
     bytes_per_pixel: u32,
-) -> Vec<u8> {
+) -> Result<Vec<u8>, SwizzleError> {
+    let expected_size = swizzled_surface_size(
+        width,
+        height,
+        depth_or_array_layers,
+        swizzle,
+        pitch,
+        tile_mode,
+        bytes_per_pixel,
+    );
+    if source.len() < expected_size {
+        return Err(SwizzleError::NotEnoughData {
+            expected_size,
+            actual_size: source.len(),
+        });
+    }
+
     let mut output = vec![
         0u8;
         width as usize
@@ -29,19 +72,21 @@ pub fn deswizzle_surface(
             * bytes_per_pixel as usize
     ];
 
-    swizzle_surface_inner::<false>(
-        width,
-        height,
-        depth_or_array_layers,
-        source,
-        &mut output,
-        swizzle,
-        pitch,
-        tile_mode,
-        bytes_per_pixel,
-    );
+    if !output.is_empty() {
+        swizzle_surface_inner::<false>(
+            width,
+            height,
+            depth_or_array_layers,
+            source,
+            &mut output,
+            swizzle,
+            pitch,
+            tile_mode,
+            bytes_per_pixel,
+        );
+    }
 
-    output
+    Ok(output)
 }
 
 /// Tile all the array layers and mipmaps in `source` to a combined vector.
@@ -57,7 +102,16 @@ pub fn swizzle_surface(
     pitch: u32,
     tile_mode: AddrTileMode,
     bytes_per_pixel: u32,
-) -> Vec<u8> {
+) -> Result<Vec<u8>, SwizzleError> {
+    let expected_size =
+        deswizzled_surface_size(width, height, depth_or_array_layers, bytes_per_pixel);
+    if source.len() < expected_size {
+        return Err(SwizzleError::NotEnoughData {
+            expected_size,
+            actual_size: source.len(),
+        });
+    }
+
     // TODO: Is this the correct output size?
     let mut output = vec![
         0u8;
@@ -67,19 +121,78 @@ pub fn swizzle_surface(
             * bytes_per_pixel as usize
     ];
 
-    swizzle_surface_inner::<true>(
-        width,
-        height,
-        depth_or_array_layers,
-        source,
-        &mut output,
-        swizzle,
-        pitch,
-        tile_mode,
-        bytes_per_pixel,
-    );
+    if !output.is_empty() {
+        swizzle_surface_inner::<true>(
+            width,
+            height,
+            depth_or_array_layers,
+            source,
+            &mut output,
+            swizzle,
+            pitch,
+            tile_mode,
+            bytes_per_pixel,
+        );
+    }
 
-    output
+    Ok(output)
+}
+
+fn deswizzled_surface_size(
+    width: u32,
+    height: u32,
+    depth_or_array_layers: u32,
+    bytes_per_pixel: u32,
+) -> usize {
+    width as usize * height as usize * depth_or_array_layers as usize * bytes_per_pixel as usize
+}
+
+fn swizzled_surface_size(
+    width: u32,
+    height: u32,
+    depth_or_array_layers: u32,
+    swizzle: u32,
+    pitch: u32,
+    tile_mode: AddrTileMode,
+    bytes_per_pixel: u32,
+) -> usize {
+    // Addrlib code doesn't handle a bpp of 0.
+    if bytes_per_pixel == 0 {
+        return 0;
+    }
+    let bpp = bytes_per_pixel * u8::BITS;
+
+    // TODO: name in gx2?
+    let (pipe_swizzle, bank_swizzle) = addrlib::pipe_bank_swizzle(swizzle);
+
+    // TODO: How to initialize these parameters?
+    let sample = 0;
+    let num_samples = 1; // TODO: is this right?
+    let tile_base = 0; // TODO: only used for depth map textures?
+    let comp_bits = 0; // TODO: only used for depth map textures?
+
+    // TODO: How many of these fields are set from functions?
+    // TODO: Find a way to get values used from cemu to create test cases?
+    let p_in = AddrComputeSurfaceAddrFromCoordInput {
+        x: width.saturating_sub(1),
+        y: height.saturating_sub(1),
+        slice: depth_or_array_layers.saturating_sub(1),
+        sample,
+        bpp,
+        pitch,
+        height,
+        num_slices: depth_or_array_layers,
+        num_samples,
+        tile_mode,
+        is_depth: false,
+        tile_base,
+        comp_bits,
+        pipe_swizzle,
+        bank_swizzle,
+    };
+
+    // TODO: Will the corner always be the largest address?
+    addrlib::dispatch_compute_surface_addrfrom_coord(&p_in) as usize
 }
 
 fn swizzle_surface_inner<const SWIZZLE: bool>(
@@ -107,8 +220,8 @@ fn swizzle_surface_inner<const SWIZZLE: bool>(
     // TODO: How to initialize these parameters?
     let sample = 0;
     let num_samples = 1; // TODO: is this right?
-    let tile_base = 0; // TODO: only used for depth textures?
-    let comp_bits = 0; // TODO: only used for depth textures?
+    let tile_base = 0; // TODO: only used for depth map textures?
+    let comp_bits = 0; // TODO: only used for depth map textures?
 
     // TODO: addrlib uses input and output structs to "dispatch" swizzling?
     // TODO: only the input pin values matter?
@@ -178,7 +291,8 @@ mod tests {
                 256,
                 AddrTileMode::ADDR_TM_2D_TILED_THIN1,
                 8
-            )[..]
+            )
+            .unwrap()[..]
         );
     }
 
@@ -198,7 +312,8 @@ mod tests {
                 32,
                 AddrTileMode::ADDR_TM_2D_TILED_THICK,
                 4
-            )[..]
+            )
+            .unwrap()[..]
         );
     }
 

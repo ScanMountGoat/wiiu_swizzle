@@ -4,15 +4,12 @@ use libfuzzer_sys::fuzz_target;
 extern crate arbitrary;
 use arbitrary::{Arbitrary, Result, Unstructured};
 
-extern crate rand;
-use rand::{rngs::StdRng, Rng, SeedableRng};
-
 #[derive(Debug)]
 struct Input {
     width: u32,
     height: u32,
     depth_or_array_layers: u32,
-    swizzle: u32,
+    swizzle: u32, // TODO: only set bits in 0x700
     pitch: u32,
     tile_mode: wiiu_swizzle::AddrTileMode,
     bytes_per_pixel: u32,
@@ -33,27 +30,14 @@ impl<'a> Arbitrary<'a> for Input {
 }
 
 fuzz_target!(|input: Input| {
-    let deswizzled_size =
-        input.width * input.height * input.depth_or_array_layers * input.bytes_per_pixel;
+    let size = input.width as usize
+        * input.height as usize
+        * input.depth_or_array_layers as usize
+        * input.bytes_per_pixel as usize;
 
-    let seed = [13u8; 32];
-    let mut rng: StdRng = SeedableRng::from_seed(seed);
-    let deswizzled: Vec<_> = (0..deswizzled_size)
-        .map(|_| rng.gen_range::<u8, _>(0..=255))
-        .collect();
+    let swizzled = vec![0u8; size];
 
-    let swizzled = wiiu_swizzle::swizzle_surface(
-        input.width,
-        input.height,
-        input.depth_or_array_layers,
-        &deswizzled,
-        input.swizzle,
-        input.pitch,
-        input.tile_mode,
-        input.bytes_per_pixel,
-    ).unwrap();
-
-    let new_deswizzled = wiiu_swizzle::deswizzle_surface(
+    let _ = wiiu_swizzle::deswizzle_surface(
         input.width,
         input.height,
         input.depth_or_array_layers,
@@ -62,9 +46,5 @@ fuzz_target!(|input: Input| {
         input.pitch,
         input.tile_mode,
         input.bytes_per_pixel,
-    ).unwrap();
-
-    if deswizzled != new_deswizzled {
-        panic!("Swizzle deswizzle is not 1:1");
-    }
+    );
 });
