@@ -48,6 +48,14 @@ pub fn deswizzle_surface(
     tile_mode: AddrTileMode,
     bytes_per_pixel: u32,
 ) -> Result<Vec<u8>, SwizzleError> {
+    let output_size = width as usize
+        * height as usize
+        * depth_or_array_layers as usize
+        * bytes_per_pixel as usize;
+    if output_size == 0 {
+        return Ok(Vec::new());
+    }
+
     let expected_size = swizzled_surface_size(
         width,
         height,
@@ -64,27 +72,19 @@ pub fn deswizzle_surface(
         });
     }
 
-    let mut output = vec![
-        0u8;
-        width as usize
-            * height as usize
-            * depth_or_array_layers as usize
-            * bytes_per_pixel as usize
-    ];
+    let mut output = vec![0u8; output_size];
 
-    if !output.is_empty() {
-        swizzle_surface_inner::<false>(
-            width,
-            height,
-            depth_or_array_layers,
-            source,
-            &mut output,
-            swizzle,
-            pitch,
-            tile_mode,
-            bytes_per_pixel,
-        );
-    }
+    swizzle_surface_inner::<false>(
+        width,
+        height,
+        depth_or_array_layers,
+        source,
+        &mut output,
+        swizzle,
+        pitch,
+        tile_mode,
+        bytes_per_pixel,
+    )?;
 
     Ok(output)
 }
@@ -103,6 +103,20 @@ pub fn swizzle_surface(
     tile_mode: AddrTileMode,
     bytes_per_pixel: u32,
 ) -> Result<Vec<u8>, SwizzleError> {
+    // TODO: Is this the correct output size?
+    let output_size = swizzled_surface_size(
+        width,
+        height,
+        depth_or_array_layers,
+        swizzle,
+        pitch,
+        tile_mode,
+        bytes_per_pixel,
+    );
+    if output_size == 0 {
+        return Ok(Vec::new());
+    }
+
     let expected_size =
         deswizzled_surface_size(width, height, depth_or_array_layers, bytes_per_pixel);
     if source.len() < expected_size {
@@ -112,28 +126,19 @@ pub fn swizzle_surface(
         });
     }
 
-    // TODO: Is this the correct output size?
-    let mut output = vec![
-        0u8;
-        width as usize
-            * height as usize
-            * depth_or_array_layers as usize
-            * bytes_per_pixel as usize
-    ];
+    let mut output = vec![0u8; output_size];
 
-    if !output.is_empty() {
-        swizzle_surface_inner::<true>(
-            width,
-            height,
-            depth_or_array_layers,
-            source,
-            &mut output,
-            swizzle,
-            pitch,
-            tile_mode,
-            bytes_per_pixel,
-        );
-    }
+    swizzle_surface_inner::<true>(
+        width,
+        height,
+        depth_or_array_layers,
+        source,
+        &mut output,
+        swizzle,
+        pitch,
+        tile_mode,
+        bytes_per_pixel,
+    )?;
 
     Ok(output)
 }
@@ -205,7 +210,7 @@ fn swizzle_surface_inner<const SWIZZLE: bool>(
     pitch: u32,
     tile_mode: AddrTileMode,
     bytes_per_pixel: u32,
-) {
+) -> Result<(), SwizzleError> {
     // TODO: validate dimensions?
     // TODO: surface info to fill in these params?
     // TODO: rounding or padding of dimensions?
@@ -256,17 +261,35 @@ fn swizzle_surface_inner<const SWIZZLE: bool>(
                 let address = addrlib::dispatch_compute_surface_addrfrom_coord(&p_in) as usize;
                 let linear_address =
                     ((z * width * height + y * width + x) * bytes_per_pixel) as usize;
+                // TODO: Fix size calculations to avoid needing these checks.
+                // Assume the linear size estimation is accurate.
                 if SWIZZLE {
-                    output[address..address + bytes_per_pixel as usize].copy_from_slice(
-                        &source[linear_address..linear_address + bytes_per_pixel as usize],
-                    );
+                    let actual_size = output.len();
+                    output
+                        .get_mut(address..address + bytes_per_pixel as usize)
+                        .ok_or(SwizzleError::NotEnoughData {
+                            expected_size: address + bytes_per_pixel as usize,
+                            actual_size,
+                        })?
+                        .copy_from_slice(
+                            &source[linear_address..linear_address + bytes_per_pixel as usize],
+                        );
                 } else {
+                    let actual_size = source.len();
                     output[linear_address..linear_address + bytes_per_pixel as usize]
-                        .copy_from_slice(&source[address..address + bytes_per_pixel as usize]);
+                        .copy_from_slice(
+                            source
+                                .get(address..address + bytes_per_pixel as usize)
+                                .ok_or(SwizzleError::NotEnoughData {
+                                    expected_size: address + bytes_per_pixel as usize,
+                                    actual_size,
+                                })?,
+                        );
                 }
             }
         }
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -275,6 +298,22 @@ mod tests {
 
     // TODO: Add a test for micro tiling.
     // TODO: Test mipmaps
+    #[test]
+    fn deswizzle_empty() {
+        assert!(deswizzle_surface(
+            0,
+            0,
+            0,
+            &[],
+            853504,
+            256,
+            AddrTileMode::ADDR_TM_2D_TILED_THIN1,
+            8
+        )
+        .unwrap()
+        .is_empty());
+    }
+
     #[test]
     fn deswizzled_macro_tiled_1024x1024_bc1() {
         let expected = include_bytes!("data/1024x1024_bc1_tm4_p256_s853504_deswizzled.bin");
