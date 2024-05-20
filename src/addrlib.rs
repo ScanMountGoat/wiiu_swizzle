@@ -637,6 +637,32 @@ fn compute_surface_alignments_linear(
     return valid;
 }
 
+// https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L714
+fn compute_surface_alignments_micro_tiled(
+    tile_mode: TileMode,
+    bpp: u32,
+    flags: SurfaceFlags,
+    num_samples: u32,
+    base_align: &mut u32,
+    pitch_align: &mut u32,
+    height_align: &mut u32,
+) -> bool {
+    let mut bpp = bpp;
+    if bpp == 96 || bpp == 48 || bpp == 24 {
+        bpp /= 3;
+    }
+
+    let micro_tile_thickness = compute_surface_thickness(tile_mode);
+    let pitch_alignment = M_PIPE_INTERLEAVE_BYTES / bpp / num_samples / micro_tile_thickness;
+
+    *base_align = M_PIPE_INTERLEAVE_BYTES;
+    *pitch_align = pitch_alignment.max(8);
+    *height_align = 8;
+
+    adjust_pitch_alignment(flags, pitch_align);
+    return true;
+}
+
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L750
 fn compute_macro_tile_aspect_ratio(tile_mode: TileMode) -> u32 {
     match tile_mode {
@@ -814,6 +840,67 @@ fn compute_surface_info_micro_tiled(
     pad_dims: u32,
     tile_mode: TileMode,
 ) {
+    let mut micro_tile_thickness = compute_surface_thickness(tile_mode);
+    let mut pitch = p_in.width;
+    let mut height = p_in.height;
+    let mut num_slices = p_in.num_slices;
+    let num_samples = p_in.num_samples;
+    let mip_level = p_in.mip_level;
+    let bpp = p_in.bpp;
+    let mut pad_dims = pad_dims;
+    let mut tile_mode = tile_mode;
+
+    if mip_level != 0 {
+        pitch = pitch.next_power_of_two();
+        height = height.next_power_of_two();
+
+        if p_in.flags.cube() {
+            if num_slices <= 1 {
+                pad_dims = 2;
+            } else {
+                pad_dims = 0;
+            }
+        } else {
+            num_slices = num_slices.next_power_of_two();
+        }
+
+        if tile_mode == TileMode::D1TiledThick && num_slices < 4 {
+            tile_mode = TileMode::D1TiledThin1;
+            micro_tile_thickness = 1;
+        }
+    }
+
+    compute_surface_alignments_micro_tiled(
+        tile_mode,
+        p_in.bpp,
+        p_in.flags,
+        p_in.num_samples,
+        &mut p_out.base_align,
+        &mut p_out.pitch_align,
+        &mut p_out.height_align,
+    );
+
+    pad_dimensions(
+        tile_mode,
+        p_in.flags,
+        pad_dims,
+        &mut pitch,
+        p_out.pitch_align,
+        &mut height,
+        p_out.height_align,
+        &mut num_slices,
+        micro_tile_thickness,
+    );
+
+    let surface_size = bits_to_bytes(height * pitch * num_slices * bpp * num_samples);
+
+    p_out.pitch = pitch;
+    p_out.height = height;
+    p_out.depth = num_slices;
+    p_out.surf_size = surface_size as u64;
+    p_out.tile_mode = tile_mode;
+    p_out.depth_align = micro_tile_thickness;
+    //    return ADDR_OK; TODO: return type?
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L1044
@@ -1025,7 +1112,10 @@ fn compute_surface_info_macro_tiled(
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L1315
-pub fn hwl_compute_surface_info(p_in: &ComputeSurfaceInfoInput, p_out: &mut ComputeSurfaceInfoOutput) {
+pub fn hwl_compute_surface_info(
+    p_in: &ComputeSurfaceInfoInput,
+    p_out: &mut ComputeSurfaceInfoOutput,
+) {
     let mut result;
     let num_samples = p_in.num_samples.max(1);
     let mut tile_mode = p_in.tile_mode;

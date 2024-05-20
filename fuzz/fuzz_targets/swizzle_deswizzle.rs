@@ -16,6 +16,7 @@ struct Input {
     pitch: u32,
     tile_mode: wiiu_swizzle::TileMode,
     bytes_per_pixel: u32,
+    aa: wiiu_swizzle::AaMode,
 }
 
 impl<'a> Arbitrary<'a> for Input {
@@ -28,6 +29,7 @@ impl<'a> Arbitrary<'a> for Input {
             pitch: u.int_in_range(0..=256)?,
             tile_mode: u.arbitrary()?,
             bytes_per_pixel: u.int_in_range(0..=32)?,
+            aa: u.arbitrary()?,
         })
     }
 }
@@ -51,6 +53,7 @@ fuzz_target!(|input: Input| {
         input.pitch,
         input.tile_mode,
         input.bytes_per_pixel,
+        input.aa,
     )
     .unwrap();
 
@@ -63,6 +66,7 @@ fuzz_target!(|input: Input| {
         input.pitch,
         input.tile_mode,
         input.bytes_per_pixel,
+        input.aa,
     )
     .unwrap();
 

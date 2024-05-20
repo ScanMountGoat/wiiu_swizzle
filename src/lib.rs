@@ -1,10 +1,13 @@
 //! # wiiu_swizzle
 //! wiiu_swizzle is a CPU implementation of memory tiling
 //! for texture surfaces for the Wii U GPU hardware.
+//!
+//! Most applications should construct a [Gx2Surface] and use [Gx2Surface::deswizzle]
+//! to correctly handle offsets and parameter changes for different mip levels.
 pub use addrlib::TileMode;
 use addrlib::{
-    compute_surface_mip_level_tile_mode, hwl_compute_surface_info,
-    ComputeSurfaceAddrFromCoordInput, ComputeSurfaceInfoInput, ComputeSurfaceInfoOutput,
+    hwl_compute_surface_info, ComputeSurfaceAddrFromCoordInput, ComputeSurfaceInfoInput,
+    ComputeSurfaceInfoOutput,
 };
 
 mod addrlib;
@@ -146,7 +149,6 @@ impl<'a> Gx2Surface<'a> {
 
         let div_round_up = |x, d| (x + d - 1) / d;
 
-        // TODO: Add tests cases for mipmap offsets?
         let mut data = Vec::new();
         for mip in 0..self.mipmap_count {
             let source = if mip == 0 {
@@ -154,45 +156,78 @@ impl<'a> Gx2Surface<'a> {
                 self.image_data
             } else if mip == 1 {
                 // The slice already accounts for the mip 1 offset.
-                // TODO: Set the end of the range?
-                self.mipmap_data
+                &self.mipmap_data[..self.mipmap_offsets[1] as usize]
             } else {
                 // Remaining mip levels are relative to the start of the mipmap data.
-                // TODO: Set the end of the range?
                 let offset = self.mipmap_offsets[mip as usize - 1] as usize;
-                &self.mipmap_data[offset..]
+                let next_offset = self.mipmap_offsets[mip as usize] as usize;
+                if next_offset != 0 {
+                    &self.mipmap_data[offset..next_offset]
+                } else {
+                    &self.mipmap_data[offset..]
+                }
             };
 
             // TODO: How to handle dimensions not divisible by block dimensions?
             // TODO: cemu uses mipPtr & 0x700 for swizzle for mipmaps?
             let width = div_round_up(self.width >> mip, block_width);
             let height = div_round_up(self.height >> mip, block_height);
-            let pitch = self.pitch >> mip;
 
-            // Some mipmaps need to be micro tiled instead of macro tiled.
-            let tile_mode = compute_surface_mip_level_tile_mode(
-                self.tile_mode,
-                bytes_per_pixel * u8::BITS,
-                mip,
+            // Some parameters change based on dimensions or mip level.
+            // Small mips may use micro instead of macro tiling.
+            // TODO: how to set these parameters?
+            let input = ComputeSurfaceInfoInput {
+                size: source.len() as u32,
+                tile_mode: self.tile_mode,
+                format: self.format,
+                bpp: bytes_per_pixel * u8::BITS,
+                num_samples: 1 << self.aa as u32,
                 width,
                 height,
-                1,
-                1,
-                false,
-                false,
-            );
+                num_slices: self.depth,
+                slice: 0,
+                mip_level: mip,
+                flags: Default::default(),
+                tile_info: Default::default(),
+                tile_type: addrlib::TileType::Displayable,
+                tile_index: 0,
+            };
+            // TODO: Can this use defaults?
+            let mut output = ComputeSurfaceInfoOutput {
+                size: 0,
+                pitch: 0,
+                height: 0,
+                depth: self.depth,
+                surf_size: 0,
+                tile_mode: self.tile_mode,
+                base_align: 0,
+                pitch_align: 0,
+                height_align: 0,
+                depth_align: 0,
+                bpp: 0,
+                pixel_pitch: 0,
+                pixel_height: 0,
+                pixel_bits: 0,
+                slice_size: 0,
+                pitch_tile_max: 0,
+                height_tile_max: 0,
+                slice_tile_max: 0,
+                tile_info: Default::default(),
+                tile_type: addrlib::TileType::Displayable,
+                tile_index: 0,
+            };
+            hwl_compute_surface_info(&input, &mut output);
 
-            // TODO: num samples as 1 << aa?
-            // TODO: Handle mipmaps smaller than the block dimensions?
             let mip = deswizzle_mipmap(
                 width,
                 height,
-                1,
+                self.depth,
                 source,
                 self.swizzle,
-                pitch,
-                tile_mode,
+                output.pitch,
+                output.tile_mode,
                 bytes_per_pixel,
+                self.aa,
             )?;
             data.extend_from_slice(&mip);
         }
@@ -216,6 +251,7 @@ pub fn deswizzle_mipmap(
     pitch: u32,
     tile_mode: TileMode,
     bytes_per_pixel: u32,
+    aa: AaMode,
 ) -> Result<Vec<u8>, SwizzleError> {
     let output_size = width as usize
         * height as usize
@@ -253,6 +289,7 @@ pub fn deswizzle_mipmap(
         pitch,
         tile_mode,
         bytes_per_pixel,
+        aa,
     )?;
 
     Ok(output)
@@ -272,6 +309,7 @@ pub fn swizzle_mipmap(
     pitch: u32,
     tile_mode: TileMode,
     bytes_per_pixel: u32,
+    aa: AaMode,
 ) -> Result<Vec<u8>, SwizzleError> {
     // TODO: Is this the correct output size?
     let output_size = swizzled_surface_size(
@@ -308,6 +346,7 @@ pub fn swizzle_mipmap(
         pitch,
         tile_mode,
         bytes_per_pixel,
+        aa,
     )?;
 
     Ok(output)
@@ -382,6 +421,7 @@ fn swizzle_surface_inner<const SWIZZLE: bool>(
     pitch: u32,
     tile_mode: TileMode,
     bytes_per_pixel: u32,
+    aa: AaMode,
 ) -> Result<(), SwizzleError> {
     // TODO: validate dimensions?
     // TODO: compute surface info to fill in these params?
@@ -396,7 +436,7 @@ fn swizzle_surface_inner<const SWIZZLE: bool>(
 
     // TODO: How to initialize these parameters?
     let sample = 0;
-    let num_samples = 1; // TODO: is this based on self.aa?
+    let num_samples = 1 << aa as u32; // TODO: is this based on self.aa?
     let tile_base = 0; // TODO: only used for depth map textures?
     let comp_bits = 0; // TODO: only used for depth map textures?
 
@@ -456,11 +496,19 @@ mod tests {
     // TODO: Add a test for micro tiling.
     #[test]
     fn deswizzle_empty() {
-        assert!(
-            deswizzle_mipmap(0, 0, 0, &[], 853504, 256, TileMode::D2TiledThin1, 8)
-                .unwrap()
-                .is_empty()
-        );
+        assert!(deswizzle_mipmap(
+            0,
+            0,
+            0,
+            &[],
+            853504,
+            256,
+            TileMode::D2TiledThin1,
+            8,
+            AaMode::X1
+        )
+        .unwrap()
+        .is_empty());
     }
 
     #[test]
@@ -478,7 +526,8 @@ mod tests {
                 853504,
                 256,
                 TileMode::D2TiledThin1,
-                8
+                8,
+                AaMode::X1
             )
             .unwrap()[..]
         );
@@ -491,8 +540,18 @@ mod tests {
 
         assert_eq!(
             expected,
-            &deswizzle_mipmap(16, 16, 16, swizzled, 852224, 32, TileMode::D2TiledThick, 4).unwrap()
-                [..]
+            &deswizzle_mipmap(
+                16,
+                16,
+                16,
+                swizzled,
+                852224,
+                32,
+                TileMode::D2TiledThick,
+                4,
+                AaMode::X1
+            )
+            .unwrap()[..]
         );
     }
 
