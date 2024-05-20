@@ -1,11 +1,8 @@
 //! # wiiu_swizzle
 //! wiiu_swizzle is a CPU implementation of memory tiling
 //! for texture surfaces for the Wii U GPU hardware.
-use addrlib::AddrComputeSurfaceAddrFromCoordInput;
 pub use addrlib::TileMode;
-
-// TODO: Don't make this public.
-pub use addrlib::compute_surface_mip_level_tile_mode;
+use addrlib::{compute_surface_mip_level_tile_mode, AddrComputeSurfaceAddrFromCoordInput};
 
 mod addrlib;
 
@@ -92,6 +89,14 @@ pub enum SurfaceDim {
 
 // TODO: How to handle array layers?
 // TODO: additional enums?
+// TODO: Show how to split a combined image buffer in docs
+/// A view over Wii U GX2 texture surface to simplify swizzling operations.
+///
+/// Most of these parameters are likely stored
+/// in a texture binary file format in exactly the expected format.
+/// If a value is not present in the texture file
+/// like [usage](#structfield.usage) or [aa](#structfield.aa),
+/// using the recommended default should produce the intended result.
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug)]
 pub struct Gx2Surface<'a> {
@@ -103,16 +108,28 @@ pub struct Gx2Surface<'a> {
     pub height: u32,
     /// The depth of the base mip level in pixels.
     pub depth: u32,
+    /// The number of mipmaps or 1 if there are no additional mipmaps.
     pub mipmap_count: u32,
+    /// The format for the image data.
+    /// Many texture binary file formats store the GX2 values directly.
     pub format: SurfaceFormat,
     pub aa: AaMode,
     pub usage: u32,
+    /// The image data for the base mipmap.
     pub image_data: &'a [u8],
+    /// The image data for the mipmaps past the base level starting with mip 1.
+    /// If there are no mipmaps, simply set this to an empty slice.
     pub mipmap_data: &'a [u8],
     pub tile_mode: TileMode,
     pub swizzle: u32,
+    /// Usually `512 * bytes_per_pixel`.
     pub alignment: u32,
+    /// Horizontal pitch that typically depends on [width](#structfield.width).
     pub pitch: u32,
+    /// The offsets for each mipmap base the base level starting with mip 1.
+    /// Mipmap offsets after mip 1 are relative to the mip 1 offset.
+    ///
+    /// Many texture binary file formats use this method of encoding offsets.
     pub mipmap_offsets: [u32; 13],
 }
 
