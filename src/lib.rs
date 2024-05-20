@@ -2,7 +2,10 @@
 //! wiiu_swizzle is a CPU implementation of memory tiling
 //! for texture surfaces for the Wii U GPU hardware.
 pub use addrlib::TileMode;
-use addrlib::{compute_surface_mip_level_tile_mode, AddrComputeSurfaceAddrFromCoordInput};
+use addrlib::{
+    compute_surface_mip_level_tile_mode, hwl_compute_surface_info,
+    ComputeSurfaceAddrFromCoordInput, ComputeSurfaceInfoInput, ComputeSurfaceInfoOutput,
+};
 
 mod addrlib;
 
@@ -43,6 +46,7 @@ pub enum AaMode {
     X8 = 3,
 }
 
+// TODO: Is this the same as the AddrFormat?
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SurfaceFormat {
@@ -178,6 +182,7 @@ impl<'a> Gx2Surface<'a> {
                 false,
             );
 
+            // TODO: num samples as 1 << aa?
             // TODO: Handle mipmaps smaller than the block dimensions?
             let mip = deswizzle_mipmap(
                 width,
@@ -318,7 +323,6 @@ fn deswizzled_surface_size(
 }
 
 // TODO: Should this use ComputeSurfaceInfo functions from addrlib?
-//https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L1198
 fn swizzled_surface_size(
     width: u32,
     height: u32,
@@ -345,7 +349,7 @@ fn swizzled_surface_size(
 
     // TODO: How many of these fields are set from functions?
     // TODO: Find a way to get values used from cemu to create test cases?
-    let p_in = AddrComputeSurfaceAddrFromCoordInput {
+    let p_in = ComputeSurfaceAddrFromCoordInput {
         x: width.saturating_sub(1),
         y: height.saturating_sub(1),
         slice: depth_or_array_layers.saturating_sub(1),
@@ -407,7 +411,7 @@ fn swizzle_surface_inner<const SWIZZLE: bool>(
             for x in 0..width {
                 // TODO: How many of these fields are set from functions?
                 // TODO: Find a way to get values used from cemu to create test cases?
-                let p_in = AddrComputeSurfaceAddrFromCoordInput {
+                let p_in = ComputeSurfaceAddrFromCoordInput {
                     x,
                     y,
                     slice: z,
@@ -452,18 +456,11 @@ mod tests {
     // TODO: Add a test for micro tiling.
     #[test]
     fn deswizzle_empty() {
-        assert!(deswizzle_mipmap(
-            0,
-            0,
-            0,
-            &[],
-            853504,
-            256,
-            TileMode::ADDR_TM_2D_TILED_THIN1,
-            8
-        )
-        .unwrap()
-        .is_empty());
+        assert!(
+            deswizzle_mipmap(0, 0, 0, &[], 853504, 256, TileMode::D2TiledThin1, 8)
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]
@@ -480,7 +477,7 @@ mod tests {
                 swizzled,
                 853504,
                 256,
-                TileMode::ADDR_TM_2D_TILED_THIN1,
+                TileMode::D2TiledThin1,
                 8
             )
             .unwrap()[..]
@@ -494,17 +491,8 @@ mod tests {
 
         assert_eq!(
             expected,
-            &deswizzle_mipmap(
-                16,
-                16,
-                16,
-                swizzled,
-                852224,
-                32,
-                TileMode::ADDR_TM_2D_TILED_THICK,
-                4
-            )
-            .unwrap()[..]
+            &deswizzle_mipmap(16, 16, 16, swizzled, 852224, 32, TileMode::D2TiledThick, 4).unwrap()
+                [..]
         );
     }
 
@@ -524,7 +512,7 @@ mod tests {
             usage: 1,
             image_data: swizzled,
             mipmap_data: &swizzled[32768..],
-            tile_mode: TileMode::ADDR_TM_2D_TILED_THIN1,
+            tile_mode: TileMode::D2TiledThin1,
             swizzle: 132352,
             alignment: 4096,
             pitch: 64,
