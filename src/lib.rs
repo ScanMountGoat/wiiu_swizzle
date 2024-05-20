@@ -218,13 +218,16 @@ impl<'a> Gx2Surface<'a> {
             };
             hwl_compute_surface_info(&input, &mut output);
 
+            // TODO: Why does output.pitch not work?
+            let pitch = self.pitch >> mip;
+
             let mip = deswizzle_mipmap(
                 width,
                 height,
                 self.depth,
                 source,
                 self.swizzle,
-                output.pitch,
+                pitch,
                 output.tile_mode,
                 bytes_per_pixel,
                 self.aa,
@@ -269,6 +272,7 @@ pub fn deswizzle_mipmap(
         pitch,
         tile_mode,
         bytes_per_pixel,
+        aa,
     );
     if source.len() < expected_size {
         return Err(SwizzleError::NotEnoughData {
@@ -320,6 +324,7 @@ pub fn swizzle_mipmap(
         pitch,
         tile_mode,
         bytes_per_pixel,
+        aa,
     );
     if output_size == 0 {
         return Ok(Vec::new());
@@ -370,6 +375,7 @@ fn swizzled_surface_size(
     pitch: u32,
     tile_mode: TileMode,
     bytes_per_pixel: u32,
+    aa: AaMode,
 ) -> usize {
     // Addrlib code doesn't handle a bpp of 0.
     if bytes_per_pixel == 0 {
@@ -382,7 +388,7 @@ fn swizzled_surface_size(
 
     // TODO: How to initialize these parameters?
     let sample = 0;
-    let num_samples = 1; // TODO: is this right?
+    let num_samples = 1 << aa as u32;
     let tile_base = 0; // TODO: only used for depth map textures?
     let comp_bits = 0; // TODO: only used for depth map textures?
 

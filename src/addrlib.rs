@@ -223,7 +223,38 @@ fn pad_dimensions(
     height_align: u32,
     slices: &mut u32,
     slice_align: u32,
-) {
+) -> u32 {
+    let thickness = compute_surface_thickness(tile_mode);
+
+    let mut pad_dims = pad_dims;
+    if pad_dims == 0 {
+        pad_dims = 3;
+    }
+
+    if pitch_align.is_power_of_two() {
+        *pitch = pitch.next_multiple_of(pitch_align);
+    } else {
+        *pitch += pitch_align - 1;
+        *pitch /= pitch_align;
+        *pitch *= pitch_align;
+    }
+
+    if pad_dims > 1 {
+        *height = height.next_multiple_of(height_align);
+    }
+
+    if pad_dims > 2 || thickness > 1 {
+        // TODO: cube maps?
+        // if flags.cube() && (!mConfigFlags.noCubeMipSlicesPad || flags.cube_as_array()) {
+        // *slices = slices.next_power_of_two();
+        // }
+
+        if thickness > 1 {
+            *slices = slices.next_multiple_of(slice_align);
+        }
+    }
+
+    return pad_dims;
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/core/addrlib.cpp#L643
