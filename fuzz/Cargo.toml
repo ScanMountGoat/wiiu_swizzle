@@ -24,6 +24,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "deswizzle_mipmap"
+path = "fuzz_targets/deswizzle_mipmap.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "deswizzle_surface"
 path = "fuzz_targets/deswizzle_surface.rs"
 test = false

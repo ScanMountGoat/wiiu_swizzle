@@ -37,6 +37,7 @@ impl std::fmt::Display for SwizzleError {
 impl std::error::Error for SwizzleError {}
 
 // TODO: Include all gx2 enum variants?
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug)]
 pub enum AaMode {
     X1 = 0,
@@ -45,6 +46,7 @@ pub enum AaMode {
     X8 = 3,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug)]
 pub enum SurfaceFormat {
     R8G8B8A8Unorm = 26,
@@ -79,6 +81,7 @@ impl SurfaceFormat {
     }
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug)]
 pub enum SurfaceDim {
     D1 = 0,
@@ -89,6 +92,7 @@ pub enum SurfaceDim {
 
 // TODO: How to handle array layers?
 // TODO: additional enums?
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug)]
 pub struct Gx2Surface<'a> {
     // TODO: Is this even used?
