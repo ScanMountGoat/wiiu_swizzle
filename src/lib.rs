@@ -35,7 +35,7 @@ impl std::error::Error for SwizzleError {}
 
 // TODO: Include all gx2 enum variants?
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AaMode {
     X1 = 0,
     X2 = 1,
@@ -44,7 +44,7 @@ pub enum AaMode {
 }
 
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SurfaceFormat {
     R8G8B8A8Unorm = 26,
     BC1Unorm = 49,
@@ -79,7 +79,7 @@ impl SurfaceFormat {
 }
 
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SurfaceDim {
     D1 = 0,
     D2 = 1,
@@ -161,8 +161,8 @@ impl<'a> Gx2Surface<'a> {
 
             // TODO: How to handle dimensions not divisible by block dimensions?
             // TODO: cemu uses mipPtr & 0x700 for swizzle for mipmaps?
-            let width = div_round_up(self.width, block_width) >> mip;
-            let height = div_round_up(self.height, block_height) >> mip;
+            let width = div_round_up(self.width >> mip, block_width);
+            let height = div_round_up(self.height >> mip, block_height);
             let pitch = self.pitch >> mip;
 
             // Some mipmaps need to be micro tiled instead of macro tiled.
@@ -447,7 +447,6 @@ mod tests {
     use super::*;
 
     // TODO: Add a test for micro tiling.
-    // TODO: Test mipmaps
     #[test]
     fn deswizzle_empty() {
         assert!(deswizzle_mipmap(
@@ -465,7 +464,7 @@ mod tests {
     }
 
     #[test]
-    fn deswizzled_macro_tiled_1024x1024_bc1() {
+    fn deswizzle_macro_tiled_1024x1024_bc1() {
         let expected = include_bytes!("data/1024x1024_bc1_tm4_p256_s853504_deswizzled.bin");
         let swizzled = include_bytes!("data/1024x1024_bc1_tm4_p256_s853504_swizzled.bin");
 
@@ -486,7 +485,7 @@ mod tests {
     }
 
     #[test]
-    fn deswizzled_macro_tiled_16x16x16_rgba8() {
+    fn deswizzle_macro_tiled_16x16x16_rgba8() {
         let expected = include_bytes!("data/16x16x16_rgba8_tm7_p32_s852224_deswizzled.bin");
         let swizzled = include_bytes!("data/16x16x16_rgba8_tm7_p32_s852224_swizzled.bin");
 
@@ -504,6 +503,33 @@ mod tests {
             )
             .unwrap()[..]
         );
+    }
+
+    #[test]
+    fn deswizzle_surface_256x256_bc1_mipmaps() {
+        let expected = include_bytes!("data/256x256_bc1_tm4_p64_s132352_mips8_deswizzled.bin");
+        let swizzled = include_bytes!("data/256x256_bc1_tm4_p64_s132352_mips8_swizzled.bin");
+
+        let surface = Gx2Surface {
+            dim: SurfaceDim::D2,
+            width: 256,
+            height: 256,
+            depth: 1,
+            mipmap_count: 8,
+            format: SurfaceFormat::BC1Unorm,
+            aa: AaMode::X1,
+            usage: 1,
+            image_data: swizzled,
+            mipmap_data: &swizzled[32768..],
+            tile_mode: TileMode::ADDR_TM_2D_TILED_THIN1,
+            swizzle: 132352,
+            alignment: 4096,
+            pitch: 64,
+            mipmap_offsets: [
+                32768, 9472, 11520, 12032, 12544, 13056, 13568, 0, 0, 0, 0, 0, 0,
+            ],
+        };
+        assert_eq!(expected, &surface.deswizzle().unwrap()[..]);
     }
 
     // TODO: Test cube maps
