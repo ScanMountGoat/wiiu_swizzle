@@ -264,7 +264,7 @@ pub fn deswizzle_mipmap(
         return Ok(Vec::new());
     }
 
-    let expected_size = swizzled_surface_size(
+    let expected_size = swizzled_mipmap_size(
         width,
         height,
         depth_or_array_layers,
@@ -316,7 +316,7 @@ pub fn swizzle_mipmap(
     aa: AaMode,
 ) -> Result<Vec<u8>, SwizzleError> {
     // TODO: Is this the correct output size?
-    let output_size = swizzled_surface_size(
+    let output_size = swizzled_mipmap_size(
         width,
         height,
         depth_or_array_layers,
@@ -331,7 +331,7 @@ pub fn swizzle_mipmap(
     }
 
     let expected_size =
-        deswizzled_surface_size(width, height, depth_or_array_layers, bytes_per_pixel);
+        deswizzled_mipmap_size(width, height, depth_or_array_layers, bytes_per_pixel);
     if source.len() < expected_size {
         return Err(SwizzleError::NotEnoughData {
             expected_size,
@@ -357,7 +357,7 @@ pub fn swizzle_mipmap(
     Ok(output)
 }
 
-fn deswizzled_surface_size(
+fn deswizzled_mipmap_size(
     width: u32,
     height: u32,
     depth_or_array_layers: u32,
@@ -367,7 +367,8 @@ fn deswizzled_surface_size(
 }
 
 // TODO: Should this use ComputeSurfaceInfo functions from addrlib?
-fn swizzled_surface_size(
+#[allow(clippy::too_many_arguments)]
+fn swizzled_mipmap_size(
     width: u32,
     height: u32,
     depth_or_array_layers: u32,

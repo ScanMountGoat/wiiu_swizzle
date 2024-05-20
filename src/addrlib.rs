@@ -213,6 +213,7 @@ fn adjust_pitch_alignment(flags: SurfaceFlags, pitch_align: &mut u32) {
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/core/addrlib.cpp#L433
+#[allow(clippy::too_many_arguments)]
 fn pad_dimensions(
     tile_mode: TileMode,
     flags: SurfaceFlags,
@@ -244,17 +245,16 @@ fn pad_dimensions(
     }
 
     if pad_dims > 2 || thickness > 1 {
-        // TODO: cube maps?
-        // if flags.cube() && (!mConfigFlags.noCubeMipSlicesPad || flags.cube_as_array()) {
-        // *slices = slices.next_power_of_two();
-        // }
+        if flags.cube() {
+            *slices = slices.next_power_of_two();
+        }
 
         if thickness > 1 {
             *slices = slices.next_multiple_of(slice_align);
         }
     }
 
-    return pad_dims;
+    pad_dims
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/core/addrlib.cpp#L643
@@ -441,9 +441,10 @@ fn hwl_degrade_thick_tile_mode(
     match tile_mode {
         TileMode::D1TiledThin1 => {
             // TODO: Is this case used?
-            // if (num_samples > 1 && mConfigFlags.no1DTiledMSAA) {
-            //     tile_mode = TileMode::ADDR_TM_2D_TILED_THIN1;
-            // }
+            // Cemu sets mConfigFlags to (1 << 29).
+            if num_samples > 1 {
+                tile_mode = TileMode::D2TiledThin1;
+            }
         }
         TileMode::D1TiledThick => {
             if num_samples > 1 || is_depth {
@@ -665,7 +666,7 @@ fn compute_surface_alignments_linear(
     }
 
     adjust_pitch_alignment(flags, pitch_align);
-    return valid;
+    valid
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L714
@@ -691,7 +692,7 @@ fn compute_surface_alignments_micro_tiled(
     *height_align = 8;
 
     adjust_pitch_alignment(flags, pitch_align);
-    return true;
+    true
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L750
@@ -706,14 +707,11 @@ fn compute_macro_tile_aspect_ratio(tile_mode: TileMode) -> u32 {
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L781
 fn is_dual_base_align_needed(tile_mode: TileMode) -> bool {
-    if tile_mode > TileMode::D1TiledThick {
-        true
-    } else {
-        false
-    }
+    tile_mode > TileMode::D1TiledThick
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L805
+#[allow(clippy::too_many_arguments)]
 fn compute_surface_alignments_macrotiled(
     tile_mode: TileMode,
     bpp: u32,
@@ -789,7 +787,7 @@ fn compute_surface_alignments_macrotiled(
 
     *macro_width = macro_tile_width;
     *macro_height = macro_tile_height;
-    return true;
+    true
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L889
@@ -964,17 +962,17 @@ fn is_dual_pitch_align_needed(tile_mode: TileMode, is_depth: bool, mip_level: u3
         return false;
     }
 
-    match tile_mode {
+    !matches!(
+        tile_mode,
         TileMode::LinearGeneral
-        | TileMode::LinearAligned
-        | TileMode::D1TiledThin1
-        | TileMode::D1TiledThick
-        | TileMode::D2TiledThick
-        | TileMode::B2TiledThick
-        | TileMode::D3TiledThick
-        | TileMode::B3TiledThick => false,
-        _ => true,
-    }
+            | TileMode::LinearAligned
+            | TileMode::D1TiledThin1
+            | TileMode::D1TiledThick
+            | TileMode::D2TiledThick
+            | TileMode::B2TiledThick
+            | TileMode::D3TiledThick
+            | TileMode::B3TiledThick
+    )
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L1134
@@ -1108,13 +1106,15 @@ fn compute_surface_info_macro_tiled(
         let mut tile_per_group = (M_PIPE_INTERLEAVE_BYTES >> 3) / bpp / num_samples;
         tile_per_group = (tile_per_group / compute_surface_thickness(tile_mode)).max(1);
 
-        let even_width = ((pitch - 1) / macro_width) & 1;
-        let even_height = ((height - 1) / macro_height) & 1;
+        let even_width = ((pitch - 1) / macro_width) & 1 == 0;
+        let even_height = ((height - 1) / macro_height) & 1 == 0;
 
-        if num_samples == 1 && tile_per_group == 1 && even_width == 0 {
-            if pitch > macro_width || (even_height == 0 && height > macro_height) {
-                pitch += macro_width;
-            }
+        if num_samples == 1
+            && tile_per_group == 1
+            && !even_width
+            && (pitch > macro_width || (!even_height && height > macro_height))
+        {
+            pitch += macro_width;
         }
     }
 
