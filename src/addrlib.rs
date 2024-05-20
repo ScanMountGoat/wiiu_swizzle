@@ -248,7 +248,7 @@ fn compute_surface_tile_slices(tile_mode: TileMode, bpp: u32, num_samples: u32) 
         }
     }
 
-    return tile_slices;
+    tile_slices
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L421
@@ -347,6 +347,7 @@ fn hwl_degrade_thick_tile_mode(
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L544
+#[allow(clippy::too_many_arguments)]
 pub fn compute_surface_mip_level_tile_mode(
     base_tile_mode: TileMode,
     bpp: u32,
@@ -438,18 +439,12 @@ pub fn compute_surface_mip_level_tile_mode(
         _ => (),
     }
 
-    if tile_mode == TileMode::ADDR_TM_1D_TILED_THICK {
-        if num_slices < 4 {
-            tile_mode = TileMode::ADDR_TM_1D_TILED_THIN1;
-        }
-    } else if tile_mode == TileMode::ADDR_TM_2D_TILED_THICK {
-        if num_slices < 4 {
-            tile_mode = TileMode::ADDR_TM_2D_TILED_THIN1;
-        }
-    } else if tile_mode == TileMode::ADDR_TM_3D_TILED_THICK {
-        if num_slices < 4 {
-            tile_mode = TileMode::ADDR_TM_3D_TILED_THIN1;
-        }
+    if tile_mode == TileMode::ADDR_TM_1D_TILED_THICK && num_slices < 4 {
+        tile_mode = TileMode::ADDR_TM_1D_TILED_THIN1;
+    } else if tile_mode == TileMode::ADDR_TM_2D_TILED_THICK && num_slices < 4 {
+        tile_mode = TileMode::ADDR_TM_2D_TILED_THIN1;
+    } else if tile_mode == TileMode::ADDR_TM_3D_TILED_THICK && num_slices < 4 {
+        tile_mode = TileMode::ADDR_TM_3D_TILED_THIN1;
     }
 
     compute_surface_mip_level_tile_mode(
@@ -466,6 +461,7 @@ pub fn compute_surface_mip_level_tile_mode(
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/core/addrlib.cpp#L606
+#[allow(clippy::too_many_arguments)]
 fn compute_surface_addr_from_coord_linear(
     x: u32,
     y: u32,
@@ -578,6 +574,7 @@ fn get_tile_type(is_depth: bool) -> AddrTileType {
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L1407
+#[allow(clippy::too_many_arguments)]
 fn compute_surface_addr_from_coord_micro_tiled(
     x: u32,
     y: u32,
@@ -708,6 +705,7 @@ fn compute_bank_from_coord_wo_rotation(x: u32, y: u32) -> u32 {
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L1582
+#[allow(clippy::too_many_arguments)]
 fn compute_surface_addr_from_coord_macro_tiled(
     x: u32,
     y: u32,

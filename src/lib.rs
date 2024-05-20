@@ -201,6 +201,7 @@ impl<'a> Gx2Surface<'a> {
 ///
 /// For block compressed formats, `width` and `height` should be the dimensions in blocks
 /// with `bytes_per_pixel` being the size of a block in bytes.
+#[allow(clippy::too_many_arguments)]
 pub fn deswizzle_mipmap(
     width: u32,
     height: u32,
@@ -256,6 +257,7 @@ pub fn deswizzle_mipmap(
 ///
 /// For block compressed formats, `width` and `height` should be the dimensions in blocks
 /// with `bytes_per_pixel` being the size of a block in bytes.
+#[allow(clippy::too_many_arguments)]
 pub fn swizzle_mipmap(
     width: u32,
     height: u32,
@@ -365,6 +367,7 @@ fn swizzled_surface_size(
     addrlib::dispatch_compute_surface_addrfrom_coord(&p_in) as usize
 }
 
+#[allow(clippy::too_many_arguments)]
 fn swizzle_surface_inner<const SWIZZLE: bool>(
     width: u32,
     height: u32,
