@@ -19,11 +19,12 @@ const MICRO_TILE_HEIGHT: u32 = 8;
 const THICK_TILE_THICKNESS: u32 = 4;
 const MICRO_TILE_PIXELS: u32 = MICRO_TILE_WIDTH * MICRO_TILE_HEIGHT;
 
+// TODO: Add original name in doc comments from gx2 enums?
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/include/addrlib/addrtypes.h
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-pub enum AddrTileMode {
+pub enum TileMode {
     ADDR_TM_LINEAR_GENERAL = 0x0,
     ADDR_TM_LINEAR_ALIGNED = 0x1,
     ADDR_TM_1D_TILED_THIN1 = 0x2,
@@ -70,7 +71,7 @@ pub struct AddrComputeSurfaceAddrFromCoordInput {
     pub height: u32,
     pub num_slices: u32,
     pub num_samples: u32,
-    pub tile_mode: AddrTileMode,
+    pub tile_mode: TileMode,
     pub is_depth: bool,
     pub tile_base: u32,
     pub comp_bits: u32,
@@ -90,14 +91,14 @@ fn bit(v: u32, b: u32) -> u32 {
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/core/addrlib.cpp#L306
-fn compute_surface_thickness(tile_mode: AddrTileMode) -> u32 {
+fn compute_surface_thickness(tile_mode: TileMode) -> u32 {
     match tile_mode {
-        AddrTileMode::ADDR_TM_1D_TILED_THICK
-        | AddrTileMode::ADDR_TM_2D_TILED_THICK
-        | AddrTileMode::ADDR_TM_2B_TILED_THICK
-        | AddrTileMode::ADDR_TM_3D_TILED_THICK
-        | AddrTileMode::ADDR_TM_3B_TILED_THICK => 4,
-        AddrTileMode::ADDR_TM_2D_TILED_XTHICK | AddrTileMode::ADDR_TM_3D_TILED_XTHICK => 8,
+        TileMode::ADDR_TM_1D_TILED_THICK
+        | TileMode::ADDR_TM_2D_TILED_THICK
+        | TileMode::ADDR_TM_2B_TILED_THICK
+        | TileMode::ADDR_TM_3D_TILED_THICK
+        | TileMode::ADDR_TM_3B_TILED_THICK => 4,
+        TileMode::ADDR_TM_2D_TILED_XTHICK | TileMode::ADDR_TM_3D_TILED_XTHICK => 8,
         _ => 1,
     }
 }
@@ -108,7 +109,7 @@ fn compute_pixel_index_within_micro_tile(
     y: u32,
     z: u32,
     bpp: u32,
-    tile_mode: AddrTileMode,
+    tile_mode: TileMode,
     tile_type: AddrTileType,
 ) -> u32 {
     let pixel_bit0;
@@ -205,7 +206,7 @@ fn compute_pixel_index_within_micro_tile(
         pixel_bit8 = z2;
     }
 
-    (pixel_bit0)
+    pixel_bit0
         | (pixel_bit1 << 1)
         | (pixel_bit2 << 2)
         | (pixel_bit3 << 3)
@@ -216,21 +217,55 @@ fn compute_pixel_index_within_micro_tile(
         | (pixel_bit8 << 8)
 }
 
-// https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L421
-fn compute_surface_rotation_from_tile_mode(tile_mode: AddrTileMode) -> u32 {
+// https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L355
+fn convert_to_non_bank_swapped_model(tile_mode: TileMode) -> TileMode {
     match tile_mode {
-        AddrTileMode::ADDR_TM_2D_TILED_THIN1
-        | AddrTileMode::ADDR_TM_2D_TILED_THIN2
-        | AddrTileMode::ADDR_TM_2D_TILED_THIN4
-        | AddrTileMode::ADDR_TM_2D_TILED_THICK
-        | AddrTileMode::ADDR_TM_2B_TILED_THIN1
-        | AddrTileMode::ADDR_TM_2B_TILED_THIN2
-        | AddrTileMode::ADDR_TM_2B_TILED_THIN4
-        | AddrTileMode::ADDR_TM_2B_TILED_THICK => M_PIPES * ((M_BANKS >> 1) - 1),
-        AddrTileMode::ADDR_TM_3D_TILED_THIN1
-        | AddrTileMode::ADDR_TM_3D_TILED_THICK
-        | AddrTileMode::ADDR_TM_3B_TILED_THIN1
-        | AddrTileMode::ADDR_TM_3B_TILED_THICK => {
+        TileMode::ADDR_TM_2B_TILED_THIN1 => TileMode::ADDR_TM_2D_TILED_THIN1,
+        TileMode::ADDR_TM_2B_TILED_THIN2 => TileMode::ADDR_TM_2D_TILED_THIN2,
+        TileMode::ADDR_TM_2B_TILED_THIN4 => TileMode::ADDR_TM_2D_TILED_THIN4,
+        TileMode::ADDR_TM_2B_TILED_THICK => TileMode::ADDR_TM_2D_TILED_THICK,
+        TileMode::ADDR_TM_3B_TILED_THIN1 => TileMode::ADDR_TM_3D_TILED_THIN1,
+        TileMode::ADDR_TM_3B_TILED_THICK => TileMode::ADDR_TM_3D_TILED_THICK,
+        _ => tile_mode,
+    }
+}
+
+// https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L387
+fn compute_surface_tile_slices(tile_mode: TileMode, bpp: u32, num_samples: u32) -> u32 {
+    let mut num_samples = num_samples;
+    let bytes_per_sample = bits_to_bytes(bpp * 64);
+    let mut tile_slices = 1;
+
+    if compute_surface_thickness(tile_mode) > 1 {
+        num_samples = 4;
+    }
+
+    if bytes_per_sample != 0 {
+        let sample_per_tile = M_SPLIT_SIZE / bytes_per_sample;
+
+        if sample_per_tile != 0 {
+            tile_slices = (num_samples / sample_per_tile).max(1);
+        }
+    }
+
+    return tile_slices;
+}
+
+// https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L421
+fn compute_surface_rotation_from_tile_mode(tile_mode: TileMode) -> u32 {
+    match tile_mode {
+        TileMode::ADDR_TM_2D_TILED_THIN1
+        | TileMode::ADDR_TM_2D_TILED_THIN2
+        | TileMode::ADDR_TM_2D_TILED_THIN4
+        | TileMode::ADDR_TM_2D_TILED_THICK
+        | TileMode::ADDR_TM_2B_TILED_THIN1
+        | TileMode::ADDR_TM_2B_TILED_THIN2
+        | TileMode::ADDR_TM_2B_TILED_THIN4
+        | TileMode::ADDR_TM_2B_TILED_THICK => M_PIPES * ((M_BANKS >> 1) - 1),
+        TileMode::ADDR_TM_3D_TILED_THIN1
+        | TileMode::ADDR_TM_3D_TILED_THICK
+        | TileMode::ADDR_TM_3B_TILED_THIN1
+        | TileMode::ADDR_TM_3B_TILED_THICK => {
             if M_PIPES >= 4 {
                 (M_PIPES >> 1) - 1
             } else {
@@ -239,6 +274,195 @@ fn compute_surface_rotation_from_tile_mode(tile_mode: AddrTileMode) -> u32 {
         }
         _ => 0,
     }
+}
+
+// https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L466
+fn hwl_degrade_thick_tile_mode(
+    tile_mode: TileMode,
+    num_samples: u32,
+    tile_slices: u32,
+    is_depth: bool,
+) -> TileMode {
+    let mut tile_mode = tile_mode;
+    match tile_mode {
+        TileMode::ADDR_TM_1D_TILED_THIN1 => {
+            // TODO: Is this case used?
+            // if (num_samples > 1 && mConfigFlags.no1DTiledMSAA) {
+            //     tile_mode = TileMode::ADDR_TM_2D_TILED_THIN1;
+            // }
+        }
+        TileMode::ADDR_TM_1D_TILED_THICK => {
+            if num_samples > 1 || is_depth {
+                tile_mode = TileMode::ADDR_TM_1D_TILED_THIN1;
+            }
+
+            if num_samples == 2 || num_samples == 4 {
+                tile_mode = TileMode::ADDR_TM_2D_TILED_THICK;
+            }
+        }
+        TileMode::ADDR_TM_2D_TILED_THIN2 => {
+            if 2 * M_PIPE_INTERLEAVE_BYTES > M_SPLIT_SIZE {
+                tile_mode = TileMode::ADDR_TM_2D_TILED_THIN1;
+            }
+        }
+        TileMode::ADDR_TM_2D_TILED_THIN4 => {
+            if 4 * M_PIPE_INTERLEAVE_BYTES > M_SPLIT_SIZE {
+                tile_mode = TileMode::ADDR_TM_2D_TILED_THIN2;
+            }
+        }
+        TileMode::ADDR_TM_2D_TILED_THICK => {
+            if num_samples > 1 || tile_slices > 1 || is_depth {
+                tile_mode = TileMode::ADDR_TM_2D_TILED_THIN1;
+            }
+        }
+        TileMode::ADDR_TM_2B_TILED_THIN2 => {
+            if 2 * M_PIPE_INTERLEAVE_BYTES > M_SPLIT_SIZE {
+                tile_mode = TileMode::ADDR_TM_2B_TILED_THIN1;
+            }
+        }
+        TileMode::ADDR_TM_2B_TILED_THIN4 => {
+            if 4 * M_PIPE_INTERLEAVE_BYTES > M_SPLIT_SIZE {
+                tile_mode = TileMode::ADDR_TM_2B_TILED_THIN2;
+            }
+        }
+        TileMode::ADDR_TM_2B_TILED_THICK => {
+            if num_samples > 1 || tile_slices > 1 || is_depth {
+                tile_mode = TileMode::ADDR_TM_2B_TILED_THIN1;
+            }
+        }
+        TileMode::ADDR_TM_3D_TILED_THICK => {
+            if num_samples > 1 || tile_slices > 1 || is_depth {
+                tile_mode = TileMode::ADDR_TM_3D_TILED_THIN1;
+            }
+        }
+        TileMode::ADDR_TM_3B_TILED_THICK => {
+            if num_samples > 1 || tile_slices > 1 || is_depth {
+                tile_mode = TileMode::ADDR_TM_3B_TILED_THIN1;
+            }
+        }
+        _ => (),
+    }
+
+    tile_mode
+}
+
+// https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L544
+pub fn compute_surface_mip_level_tile_mode(
+    base_tile_mode: TileMode,
+    bpp: u32,
+    level: u32,
+    width: u32,
+    height: u32,
+    num_slices: u32,
+    num_samples: u32,
+    is_depth: bool,
+    no_recursive: bool,
+) -> TileMode {
+    let tile_slices = compute_surface_tile_slices(base_tile_mode, bpp, num_samples);
+    let mut tile_mode =
+        hwl_degrade_thick_tile_mode(base_tile_mode, num_samples, tile_slices, is_depth);
+    let rotation = compute_surface_rotation_from_tile_mode(tile_mode);
+
+    if (rotation % M_PIPES) == 0 {
+        match tile_mode {
+            TileMode::ADDR_TM_3D_TILED_THIN1 => {
+                tile_mode = TileMode::ADDR_TM_2D_TILED_THIN1;
+            }
+            TileMode::ADDR_TM_3D_TILED_THICK => {
+                tile_mode = TileMode::ADDR_TM_2D_TILED_THICK;
+            }
+            TileMode::ADDR_TM_3B_TILED_THIN1 => {
+                tile_mode = TileMode::ADDR_TM_2B_TILED_THIN1;
+            }
+            TileMode::ADDR_TM_3B_TILED_THICK => {
+                tile_mode = TileMode::ADDR_TM_2B_TILED_THICK;
+            }
+            _ => (),
+        }
+    }
+
+    if no_recursive || level == 0 {
+        return tile_mode;
+    }
+
+    let mut bpp = bpp;
+    if bpp == 96 || bpp == 48 || bpp == 24 {
+        bpp /= 3;
+    }
+
+    let width = width.next_power_of_two();
+    let height = height.next_power_of_two();
+    let num_slices = num_slices.next_power_of_two();
+
+    tile_mode = convert_to_non_bank_swapped_model(tile_mode);
+
+    let thickness = compute_surface_thickness(tile_mode);
+    let micro_tile_bytes = bits_to_bytes(num_samples * bpp * thickness * 64);
+    let mut width_align_factor = 1;
+
+    if micro_tile_bytes <= M_PIPE_INTERLEAVE_BYTES {
+        width_align_factor = M_PIPE_INTERLEAVE_BYTES / micro_tile_bytes;
+    }
+
+    let mut macro_tile_width = 8 * M_BANKS;
+    let mut macro_tile_height = 8 * M_PIPES;
+
+    // Reduce the tile mode from 2D/3D to 1D in following conditions
+    match tile_mode {
+        TileMode::ADDR_TM_2D_TILED_THIN1 | TileMode::ADDR_TM_3D_TILED_THIN1 => {
+            if width < width_align_factor * macro_tile_width || height < macro_tile_height {
+                tile_mode = TileMode::ADDR_TM_1D_TILED_THIN1;
+            }
+        }
+        TileMode::ADDR_TM_2D_TILED_THIN2 => {
+            macro_tile_width >>= 1;
+            macro_tile_height *= 2;
+
+            if width < width_align_factor * macro_tile_width || height < macro_tile_height {
+                tile_mode = TileMode::ADDR_TM_1D_TILED_THIN1;
+            }
+        }
+        TileMode::ADDR_TM_2D_TILED_THIN4 => {
+            macro_tile_width >>= 2;
+            macro_tile_height *= 4;
+
+            if width < width_align_factor * macro_tile_width || height < macro_tile_height {
+                tile_mode = TileMode::ADDR_TM_1D_TILED_THIN1;
+            }
+        }
+        TileMode::ADDR_TM_2D_TILED_THICK | TileMode::ADDR_TM_3D_TILED_THICK => {
+            if width < width_align_factor * macro_tile_width || height < macro_tile_height {
+                tile_mode = TileMode::ADDR_TM_1D_TILED_THICK;
+            }
+        }
+        _ => (),
+    }
+
+    if tile_mode == TileMode::ADDR_TM_1D_TILED_THICK {
+        if num_slices < 4 {
+            tile_mode = TileMode::ADDR_TM_1D_TILED_THIN1;
+        }
+    } else if tile_mode == TileMode::ADDR_TM_2D_TILED_THICK {
+        if num_slices < 4 {
+            tile_mode = TileMode::ADDR_TM_2D_TILED_THIN1;
+        }
+    } else if tile_mode == TileMode::ADDR_TM_3D_TILED_THICK {
+        if num_slices < 4 {
+            tile_mode = TileMode::ADDR_TM_3D_TILED_THIN1;
+        }
+    }
+
+    compute_surface_mip_level_tile_mode(
+        tile_mode,
+        bpp,
+        level,
+        width,
+        height,
+        num_slices,
+        num_samples,
+        is_depth,
+        true,
+    )
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/core/addrlib.cpp#L606
@@ -262,44 +486,44 @@ fn compute_surface_addr_from_coord_linear(
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L750
-fn compute_macro_tile_aspect_ratio(tile_mode: AddrTileMode) -> u32 {
+fn compute_macro_tile_aspect_ratio(tile_mode: TileMode) -> u32 {
     match tile_mode {
-        AddrTileMode::ADDR_TM_2B_TILED_THIN1
-        | AddrTileMode::ADDR_TM_3D_TILED_THIN1
-        | AddrTileMode::ADDR_TM_3B_TILED_THIN1 => 1,
-        AddrTileMode::ADDR_TM_2D_TILED_THIN2 | AddrTileMode::ADDR_TM_2B_TILED_THIN2 => 2,
-        AddrTileMode::ADDR_TM_2D_TILED_THIN4 | AddrTileMode::ADDR_TM_2B_TILED_THIN4 => 4,
+        TileMode::ADDR_TM_2B_TILED_THIN1
+        | TileMode::ADDR_TM_3D_TILED_THIN1
+        | TileMode::ADDR_TM_3B_TILED_THIN1 => 1,
+        TileMode::ADDR_TM_2D_TILED_THIN2 | TileMode::ADDR_TM_2B_TILED_THIN2 => 2,
+        TileMode::ADDR_TM_2D_TILED_THIN4 | TileMode::ADDR_TM_2B_TILED_THIN4 => 4,
         _ => 1,
     }
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L1044
-fn is_thick_macro_tiled(tile_mode: AddrTileMode) -> bool {
+fn is_thick_macro_tiled(tile_mode: TileMode) -> bool {
     matches!(
         tile_mode,
-        AddrTileMode::ADDR_TM_2D_TILED_THICK
-            | AddrTileMode::ADDR_TM_2B_TILED_THICK
-            | AddrTileMode::ADDR_TM_3D_TILED_THICK
-            | AddrTileMode::ADDR_TM_3B_TILED_THICK
+        TileMode::ADDR_TM_2D_TILED_THICK
+            | TileMode::ADDR_TM_2B_TILED_THICK
+            | TileMode::ADDR_TM_3D_TILED_THICK
+            | TileMode::ADDR_TM_3B_TILED_THICK
     )
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L1070
-fn is_bank_swapped_tile_mode(tile_mode: AddrTileMode) -> bool {
+fn is_bank_swapped_tile_mode(tile_mode: TileMode) -> bool {
     matches!(
         tile_mode,
-        AddrTileMode::ADDR_TM_2B_TILED_THIN1
-            | AddrTileMode::ADDR_TM_2B_TILED_THIN2
-            | AddrTileMode::ADDR_TM_2B_TILED_THIN4
-            | AddrTileMode::ADDR_TM_2B_TILED_THICK
-            | AddrTileMode::ADDR_TM_3B_TILED_THIN1
-            | AddrTileMode::ADDR_TM_3B_TILED_THICK
+        TileMode::ADDR_TM_2B_TILED_THIN1
+            | TileMode::ADDR_TM_2B_TILED_THIN2
+            | TileMode::ADDR_TM_2B_TILED_THIN4
+            | TileMode::ADDR_TM_2B_TILED_THICK
+            | TileMode::ADDR_TM_3B_TILED_THIN1
+            | TileMode::ADDR_TM_3B_TILED_THICK
     )
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L1134
 fn compute_surface_bank_swapped_width(
-    tile_mode: AddrTileMode,
+    tile_mode: TileMode,
     bpp: u32,
     num_samples: u32,
     pitch: u32,
@@ -361,14 +585,14 @@ fn compute_surface_addr_from_coord_micro_tiled(
     bpp: u32,
     pitch: u32,
     height: u32,
-    tile_mode: AddrTileMode,
+    tile_mode: TileMode,
     is_depth: bool,
     tile_base: u32,
     comp_bits: u32,
 ) -> u32 {
     let mut micro_tile_thickness = 1;
 
-    if tile_mode == AddrTileMode::ADDR_TM_1D_TILED_THICK {
+    if tile_mode == TileMode::ADDR_TM_1D_TILED_THICK {
         micro_tile_thickness = 4;
     }
 
@@ -493,7 +717,7 @@ fn compute_surface_addr_from_coord_macro_tiled(
     pitch: u32,
     height: u32,
     num_samples: u32,
-    tile_mode: AddrTileMode,
+    tile_mode: TileMode,
     is_depth: bool,
     tile_base: u32,
     comp_bits: u32,
@@ -530,7 +754,6 @@ fn compute_surface_addr_from_coord_macro_tiled(
     }
 
     let mut elem_offset = pixel_offset + sample_offset;
-    // *pBitPosition = static_cast<uint32_t>(elemOffset % 8);
 
     let bytes_per_sample = micro_tile_bytes / num_samples;
     let samples_per_slice;
@@ -548,7 +771,6 @@ fn compute_surface_addr_from_coord_macro_tiled(
         sample_slice = elem_offset / tile_slice_bits;
         elem_offset %= tile_slice_bits;
     } else {
-        // samples_per_slice = num_samples;
         num_sample_splits = 1;
         sample_slice = 0;
     }
@@ -581,11 +803,11 @@ fn compute_surface_addr_from_coord_macro_tiled(
     let mut macro_tile_height = 8 * num_pipes;
 
     match tile_mode {
-        AddrTileMode::ADDR_TM_2D_TILED_THIN2 | AddrTileMode::ADDR_TM_2B_TILED_THIN2 => {
+        TileMode::ADDR_TM_2D_TILED_THIN2 | TileMode::ADDR_TM_2B_TILED_THIN2 => {
             macro_tile_pitch /= 2;
             macro_tile_height *= 2;
         }
-        AddrTileMode::ADDR_TM_2D_TILED_THIN4 | AddrTileMode::ADDR_TM_2B_TILED_THIN4 => {
+        TileMode::ADDR_TM_2D_TILED_THIN4 | TileMode::ADDR_TM_2B_TILED_THIN4 => {
             macro_tile_pitch /= 4;
             macro_tile_height *= 4;
         }
@@ -604,12 +826,12 @@ fn compute_surface_addr_from_coord_macro_tiled(
     // Do bank swapping if needed
     if matches!(
         tile_mode,
-        AddrTileMode::ADDR_TM_2B_TILED_THIN1
-            | AddrTileMode::ADDR_TM_2B_TILED_THIN2
-            | AddrTileMode::ADDR_TM_2B_TILED_THIN4
-            | AddrTileMode::ADDR_TM_2B_TILED_THICK
-            | AddrTileMode::ADDR_TM_3B_TILED_THIN1
-            | AddrTileMode::ADDR_TM_3B_TILED_THICK
+        TileMode::ADDR_TM_2B_TILED_THIN1
+            | TileMode::ADDR_TM_2B_TILED_THIN2
+            | TileMode::ADDR_TM_2B_TILED_THIN4
+            | TileMode::ADDR_TM_2B_TILED_THICK
+            | TileMode::ADDR_TM_3B_TILED_THIN1
+            | TileMode::ADDR_TM_3B_TILED_THICK
     ) {
         let bank_swap_order = [0, 1, 3, 2, 6, 7, 5, 4, 0, 0];
         let bank_swap_width =
@@ -623,6 +845,7 @@ fn compute_surface_addr_from_coord_macro_tiled(
     let total_offset =
         elem_offset + ((macro_tile_offset + slice_offset) >> (num_bank_bits + num_pipe_bits));
 
+    // TODO: offset_high is causing indexing out of bounds?
     let offset_high = (total_offset & !group_mask) << (num_bank_bits + num_pipe_bits);
     let offset_low = total_offset & group_mask;
     let bank_bits = bank << (num_pipe_bits + num_group_bits);
@@ -635,7 +858,7 @@ pub fn dispatch_compute_surface_addrfrom_coord(p_in: &AddrComputeSurfaceAddrFrom
     let num_samples = std::cmp::max(1, p_in.num_samples);
 
     match p_in.tile_mode {
-        AddrTileMode::ADDR_TM_LINEAR_GENERAL | AddrTileMode::ADDR_TM_LINEAR_ALIGNED => {
+        TileMode::ADDR_TM_LINEAR_GENERAL | TileMode::ADDR_TM_LINEAR_ALIGNED => {
             compute_surface_addr_from_coord_linear(
                 p_in.x,
                 p_in.y,
@@ -647,7 +870,7 @@ pub fn dispatch_compute_surface_addrfrom_coord(p_in: &AddrComputeSurfaceAddrFrom
                 p_in.num_slices,
             )
         }
-        AddrTileMode::ADDR_TM_1D_TILED_THIN1 | AddrTileMode::ADDR_TM_1D_TILED_THICK => {
+        TileMode::ADDR_TM_1D_TILED_THIN1 | TileMode::ADDR_TM_1D_TILED_THICK => {
             compute_surface_addr_from_coord_micro_tiled(
                 p_in.x,
                 p_in.y,
@@ -661,18 +884,18 @@ pub fn dispatch_compute_surface_addrfrom_coord(p_in: &AddrComputeSurfaceAddrFrom
                 p_in.comp_bits,
             )
         }
-        AddrTileMode::ADDR_TM_2D_TILED_THIN1
-        | AddrTileMode::ADDR_TM_2D_TILED_THIN2
-        | AddrTileMode::ADDR_TM_2D_TILED_THIN4
-        | AddrTileMode::ADDR_TM_2D_TILED_THICK
-        | AddrTileMode::ADDR_TM_2B_TILED_THIN1
-        | AddrTileMode::ADDR_TM_2B_TILED_THIN2
-        | AddrTileMode::ADDR_TM_2B_TILED_THIN4
-        | AddrTileMode::ADDR_TM_2B_TILED_THICK
-        | AddrTileMode::ADDR_TM_3D_TILED_THIN1
-        | AddrTileMode::ADDR_TM_3D_TILED_THICK
-        | AddrTileMode::ADDR_TM_3B_TILED_THIN1
-        | AddrTileMode::ADDR_TM_3B_TILED_THICK => compute_surface_addr_from_coord_macro_tiled(
+        TileMode::ADDR_TM_2D_TILED_THIN1
+        | TileMode::ADDR_TM_2D_TILED_THIN2
+        | TileMode::ADDR_TM_2D_TILED_THIN4
+        | TileMode::ADDR_TM_2D_TILED_THICK
+        | TileMode::ADDR_TM_2B_TILED_THIN1
+        | TileMode::ADDR_TM_2B_TILED_THIN2
+        | TileMode::ADDR_TM_2B_TILED_THIN4
+        | TileMode::ADDR_TM_2B_TILED_THICK
+        | TileMode::ADDR_TM_3D_TILED_THIN1
+        | TileMode::ADDR_TM_3D_TILED_THICK
+        | TileMode::ADDR_TM_3B_TILED_THIN1
+        | TileMode::ADDR_TM_3B_TILED_THICK => compute_surface_addr_from_coord_macro_tiled(
             p_in.x,
             p_in.y,
             p_in.slice,
