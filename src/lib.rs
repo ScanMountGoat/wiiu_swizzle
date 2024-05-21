@@ -75,47 +75,204 @@ c_enum! {
     X8 = 3,
 }
 
-// TODO: link to addrlib
-// TODO: include all variants.
-// TODO: Parse the list with Python to generate the Rust enum
 // The GX2 and addrlib enums are the same.
+// https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/include/addrlib/addrtypes.h#L118
 c_enum! {
     /// GX2SurfaceFormat
     SurfaceFormat,
+    /// GX2_SURFACE_FORMAT_INVALID
+    Invalid = 0x00000000,
+    /// GX2_SURFACE_FORMAT_TC_R8_UNORM
+    R8Unorm = 0x00000001,
+    /// GX2_SURFACE_FORMAT_TC_R8_UINT
+    R8Uint = 0x00000101,
+    /// GX2_SURFACE_FORMAT_TC_R8_SNORM
+    R8Snorm = 0x00000201,
+    /// GX2_SURFACE_FORMAT_TC_R8_SINT
+    R8Sint = 0x00000301,
+    /// GX2_SURFACE_FORMAT_T_R4_G4_UNORM
+    R4G4Unorm = 0x00000002,
+    /// GX2_SURFACE_FORMAT_TCD_R16_UNORM
+    R16Unorm = 0x00000005,
+    /// GX2_SURFACE_FORMAT_TC_R16_UINT
+    R16Uint = 0x00000105,
+    /// GX2_SURFACE_FORMAT_TC_R16_SNORM
+    R16Snorm = 0x00000205,
+    /// GX2_SURFACE_FORMAT_TC_R16_SINT
+    R16Sint = 0x00000305,
+    /// GX2_SURFACE_FORMAT_TC_R16_FLOAT
+    R16Float = 0x00000806,
+    /// GX2_SURFACE_FORMAT_TC_R8_G8_UNORM
+    R8G8Unorm = 0x00000007,
+    /// GX2_SURFACE_FORMAT_TC_R8_G8_UINT
+    R8G8Uint = 0x00000107,
+    /// GX2_SURFACE_FORMAT_TC_R8_G8_SNORM
+    R8G8Snorm = 0x00000207,
+    /// GX2_SURFACE_FORMAT_TC_R8_G8_SINT
+    R8G8Sint = 0x00000307,
+    /// GX2_SURFACE_FORMAT_TCS_R5_G6_B5_UNORM
+    R5G6B5Unorm = 0x00000008,
+    /// GX2_SURFACE_FORMAT_TC_R5_G5_B5_A1_UNORM
+    R5G5B5A1Unorm = 0x0000000a,
+    /// GX2_SURFACE_FORMAT_TC_R4_G4_B4_A4_UNORM
+    R4G4B4A4Unorm = 0x0000000b,
+    /// GX2_SURFACE_FORMAT_TC_R32_UINT
+    R32Uint = 0x0000010d,
+    /// GX2_SURFACE_FORMAT_TC_R32_SINT
+    R32Sint = 0x0000030d,
+    /// GX2_SURFACE_FORMAT_TCD_R32_FLOAT
+    R32Float = 0x0000080e,
+    /// GX2_SURFACE_FORMAT_TC_R16_G16_UNORM
+    R16G16Unorm = 0x0000000f,
+    /// GX2_SURFACE_FORMAT_TC_R16_G16_UINT
+    R16G16Uint = 0x0000010f,
+    /// GX2_SURFACE_FORMAT_TC_R16_G16_SNORM
+    R16G16Snorm = 0x0000020f,
+    /// GX2_SURFACE_FORMAT_TC_R16_G16_SINT
+    R16G16Sint = 0x0000030f,
+    /// GX2_SURFACE_FORMAT_TC_R16_G16_FLOAT
+    R16G16Float = 0x00000810,
+    /// GX2_SURFACE_FORMAT_D_D24_S8_FLOAT
+    D24S8Float = 0x00000811,
+    /// GX2_SURFACE_FORMAT_TC_R11_G11_B10_FLOAT
+    R11G11B10Float = 0x00000816,
+    /// GX2_SURFACE_FORMAT_TCS_R10_G10_B10_A2_UNORM
+    R10G10B10A2Unorm = 0x00000019,
+    /// GX2_SURFACE_FORMAT_TC_R10_G10_B10_A2_UINT
+    R10G10B10A2Uint = 0x00000119,
+    /// GX2_SURFACE_FORMAT_TC_R10_G10_B10_A2_SINT
+    R10G10B10A2Sint = 0x00000319,
     /// GX2_SURFACE_FORMAT_TCS_R8_G8_B8_A8_UNORM
-    R8G8B8A8Unorm = 26,
+    R8G8B8A8Unorm = 0x0000001a,
+    /// GX2_SURFACE_FORMAT_TC_R8_G8_B8_A8_UINT
+    R8G8B8A8Uint = 0x0000011a,
+    /// GX2_SURFACE_FORMAT_TC_R8_G8_B8_A8_SNORM
+    R8G8B8A8Snorm = 0x0000021a,
+    /// GX2_SURFACE_FORMAT_TC_R8_G8_B8_A8_SINT
+    R8G8B8A8Sint = 0x0000031a,
+    /// GX2_SURFACE_FORMAT_TCS_R8_G8_B8_A8_SRGB
+    R8G8B8A8Srgb = 0x0000041a,
+    /// GX2_SURFACE_FORMAT_TC_R32_G32_UINT
+    R32G32Uint = 0x0000011d,
+    /// GX2_SURFACE_FORMAT_TC_R32_G32_SINT
+    R32G32Sint = 0x0000031d,
+    /// GX2_SURFACE_FORMAT_TC_R32_G32_FLOAT
+    R32G32Float = 0x0000081e,
+    /// GX2_SURFACE_FORMAT_TC_R16_G16_B16_A16_UNORM
+    R16G16B16A16Unorm = 0x0000001f,
+    /// GX2_SURFACE_FORMAT_TC_R16_G16_B16_A16_UINT
+    R16G16B16A16Uint = 0x0000011f,
+    /// GX2_SURFACE_FORMAT_TC_R16_G16_B16_A16_SNORM
+    R16G16B16A16Snorm = 0x0000021f,
+    /// GX2_SURFACE_FORMAT_TC_R16_G16_B16_A16_SINT
+    R16G16B16A16Sint = 0x0000031f,
+    /// GX2_SURFACE_FORMAT_TC_R16_G16_B16_A16_FLOAT
+    R16G16B16A16Float = 0x00000820,
+    /// GX2_SURFACE_FORMAT_TC_R32_G32_B32_A32_UINT
+    R32G32B32A32Uint = 0x00000122,
+    /// GX2_SURFACE_FORMAT_TC_R32_G32_B32_A32_SINT
+    R32G32B32A32Sint = 0x00000322,
+    /// GX2_SURFACE_FORMAT_TC_R32_G32_B32_A32_FLOAT
+    R32G32B32A32Float = 0x00000823,
     /// GX2_SURFACE_FORMAT_T_BC1_UNORM
-    BC1Unorm = 49,
+    Bc1Unorm = 0x00000031,
+    /// GX2_SURFACE_FORMAT_T_BC1_SRGB
+    Bc1Srgb = 0x00000431,
     /// GX2_SURFACE_FORMAT_T_BC2_UNORM
-    BC2Unorm = 50,
+    Bc2Unorm = 0x00000032,
+    /// GX2_SURFACE_FORMAT_T_BC2_SRGB
+    Bc2Srgb = 0x00000432,
     /// GX2_SURFACE_FORMAT_T_BC3_UNORM
-    BC3Unorm = 51,
+    Bc3Unorm = 0x00000033,
+    /// GX2_SURFACE_FORMAT_T_BC3_SRGB
+    Bc3Srgb = 0x00000433,
     /// GX2_SURFACE_FORMAT_T_BC4_UNORM
-    BC4Unorm = 52,
+    Bc4Unorm = 0x00000034,
+    /// GX2_SURFACE_FORMAT_T_BC4_SNORM
+    Bc4Snorm = 0x00000234,
     /// GX2_SURFACE_FORMAT_T_BC5_UNORM
-    BC5Unorm = 53,
+    Bc5Unorm = 0x00000035,
+    /// GX2_SURFACE_FORMAT_T_BC5_SNORM
+    Bc5Snorm = 0x00000235,
 }
 
 impl SurfaceFormat {
     pub fn block_dim(&self) -> (u32, u32) {
         match self {
-            SurfaceFormat::R8G8B8A8Unorm => (1, 1),
-            SurfaceFormat::BC1Unorm => (4, 4),
-            SurfaceFormat::BC2Unorm => (4, 4),
-            SurfaceFormat::BC3Unorm => (4, 4),
-            SurfaceFormat::BC4Unorm => (4, 4),
-            SurfaceFormat::BC5Unorm => (4, 4),
+            SurfaceFormat::Bc1Unorm => (4, 4),
+            SurfaceFormat::Bc1Srgb => (4, 4),
+            SurfaceFormat::Bc2Unorm => (4, 4),
+            SurfaceFormat::Bc2Srgb => (4, 4),
+            SurfaceFormat::Bc3Unorm => (4, 4),
+            SurfaceFormat::Bc3Srgb => (4, 4),
+            SurfaceFormat::Bc4Unorm => (4, 4),
+            SurfaceFormat::Bc4Snorm => (4, 4),
+            SurfaceFormat::Bc5Unorm => (4, 4),
+            SurfaceFormat::Bc5Snorm => (4, 4),
+            _ => (1, 1),
         }
     }
 
+    // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/core/addrelemlib.cpp#L139
     pub fn bytes_per_pixel(&self) -> u32 {
         match self {
+            SurfaceFormat::Invalid => 0,
+            SurfaceFormat::R8Unorm => 1,
+            SurfaceFormat::R8Uint => 1,
+            SurfaceFormat::R8Snorm => 1,
+            SurfaceFormat::R8Sint => 1,
+            SurfaceFormat::R4G4Unorm => 1,
+            SurfaceFormat::R16Unorm => 2,
+            SurfaceFormat::R16Uint => 2,
+            SurfaceFormat::R16Snorm => 2,
+            SurfaceFormat::R16Sint => 2,
+            SurfaceFormat::R16Float => 2,
+            SurfaceFormat::R8G8Unorm => 2,
+            SurfaceFormat::R8G8Uint => 2,
+            SurfaceFormat::R8G8Snorm => 2,
+            SurfaceFormat::R8G8Sint => 2,
+            SurfaceFormat::R5G6B5Unorm => 2,
+            SurfaceFormat::R5G5B5A1Unorm => 2,
+            SurfaceFormat::R4G4B4A4Unorm => 2,
+            SurfaceFormat::R32Uint => 4,
+            SurfaceFormat::R32Sint => 4,
+            SurfaceFormat::R32Float => 4,
+            SurfaceFormat::R16G16Unorm => 4,
+            SurfaceFormat::R16G16Uint => 4,
+            SurfaceFormat::R16G16Snorm => 4,
+            SurfaceFormat::R16G16Sint => 4,
+            SurfaceFormat::R16G16Float => 4,
+            SurfaceFormat::D24S8Float => 4,
+            SurfaceFormat::R11G11B10Float => 4,
+            SurfaceFormat::R10G10B10A2Unorm => 4,
+            SurfaceFormat::R10G10B10A2Uint => 4,
+            SurfaceFormat::R10G10B10A2Sint => 4,
             SurfaceFormat::R8G8B8A8Unorm => 4,
-            SurfaceFormat::BC1Unorm => 8,
-            SurfaceFormat::BC2Unorm => 16,
-            SurfaceFormat::BC3Unorm => 16,
-            SurfaceFormat::BC4Unorm => 8,
-            SurfaceFormat::BC5Unorm => 16,
+            SurfaceFormat::R8G8B8A8Uint => 4,
+            SurfaceFormat::R8G8B8A8Snorm => 4,
+            SurfaceFormat::R8G8B8A8Sint => 4,
+            SurfaceFormat::R8G8B8A8Srgb => 4,
+            SurfaceFormat::R32G32Uint => 8,
+            SurfaceFormat::R32G32Sint => 8,
+            SurfaceFormat::R32G32Float => 8,
+            SurfaceFormat::R16G16B16A16Unorm => 8,
+            SurfaceFormat::R16G16B16A16Uint => 8,
+            SurfaceFormat::R16G16B16A16Snorm => 8,
+            SurfaceFormat::R16G16B16A16Sint => 8,
+            SurfaceFormat::R16G16B16A16Float => 8,
+            SurfaceFormat::R32G32B32A32Uint => 16,
+            SurfaceFormat::R32G32B32A32Sint => 16,
+            SurfaceFormat::R32G32B32A32Float => 16,
+            SurfaceFormat::Bc1Unorm => 8,
+            SurfaceFormat::Bc1Srgb => 8,
+            SurfaceFormat::Bc2Unorm => 16,
+            SurfaceFormat::Bc2Srgb => 16,
+            SurfaceFormat::Bc3Unorm => 16,
+            SurfaceFormat::Bc3Srgb => 16,
+            SurfaceFormat::Bc4Unorm => 8,
+            SurfaceFormat::Bc4Snorm => 8,
+            SurfaceFormat::Bc5Unorm => 16,
+            SurfaceFormat::Bc5Snorm => 16,
         }
     }
 }
@@ -608,7 +765,7 @@ mod tests {
             height: 256,
             depth: 1,
             mipmap_count: 8,
-            format: SurfaceFormat::BC1Unorm,
+            format: SurfaceFormat::Bc1Unorm,
             aa: AaMode::X1,
             usage: 1,
             image_data: swizzled,
