@@ -39,25 +39,60 @@ impl std::fmt::Display for SwizzleError {
 
 impl std::error::Error for SwizzleError {}
 
+// TODO: Use try into and avoid panic.
+#[macro_export]
+macro_rules! c_enum {
+    (#[$attr1:meta] $name:ident, $($(#[$attr2:meta])* $variant:ident=$value:expr),*,) => {
+        #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+        pub enum $name {
+            $(
+                $(#[$attr2])*
+                $variant = $value
+            ),*
+        }
+
+        impl From<u32> for $name {
+            fn from(value: u32) -> Self {
+                match value {
+                    $(
+                        $value => Self::$variant,
+                    )*
+                    _ => panic!("No variant found for {value}")
+                }
+            }
+        }
+    };
+}
+
 // TODO: Include all gx2 enum variants?
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AaMode {
+c_enum! {
+    /// GX2AAMode for the number of samples
+    AaMode,
     X1 = 0,
     X2 = 1,
     X4 = 2,
     X8 = 3,
 }
 
-// TODO: Is this the same as the AddrFormat?
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SurfaceFormat {
+// TODO: link to addrlib
+// TODO: include all variants.
+// TODO: Parse the list with Python to generate the Rust enum
+// The GX2 and addrlib enums are the same.
+c_enum! {
+    /// GX2SurfaceFormat
+    SurfaceFormat,
+    /// GX2_SURFACE_FORMAT_TCS_R8_G8_B8_A8_UNORM
     R8G8B8A8Unorm = 26,
+    /// GX2_SURFACE_FORMAT_T_BC1_UNORM
     BC1Unorm = 49,
+    /// GX2_SURFACE_FORMAT_T_BC2_UNORM
     BC2Unorm = 50,
+    /// GX2_SURFACE_FORMAT_T_BC3_UNORM
     BC3Unorm = 51,
+    /// GX2_SURFACE_FORMAT_T_BC4_UNORM
     BC4Unorm = 52,
+    /// GX2_SURFACE_FORMAT_T_BC5_UNORM
     BC5Unorm = 53,
 }
 
@@ -85,9 +120,9 @@ impl SurfaceFormat {
     }
 }
 
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SurfaceDim {
+c_enum! {
+    /// GX2SurfaceDim
+    SurfaceDim,
     D1 = 0,
     D2 = 1,
     D3 = 2,

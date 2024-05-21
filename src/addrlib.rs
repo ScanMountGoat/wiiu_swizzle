@@ -1,4 +1,4 @@
-use crate::SurfaceFormat;
+use crate::{c_enum, SurfaceFormat};
 use bilge::prelude::*;
 
 // These are class member variables in addrlib.
@@ -20,9 +20,9 @@ const THICK_TILE_THICKNESS: u32 = 4;
 const MICRO_TILE_PIXELS: u32 = MICRO_TILE_WIDTH * MICRO_TILE_HEIGHT;
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/include/addrlib/addrtypes.h#L83
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-pub enum TileMode {
+c_enum! {
+    /// GX2TileMode
+    TileMode,
     /// ADDR_TM_LINEAR_GENERAL
     LinearGeneral = 0x0,
     /// ADDR_TM_LINEAR_ALIGNED
@@ -78,6 +78,7 @@ pub enum TileType {
     ThickTiling = 0x3,
 }
 
+// TODO: Construct this manually and avoid bilge dependency?
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/include/addrlib/addrinterface.h#L266
 #[bitsize(32)]
 #[derive(DebugBits, Clone, Copy, PartialEq, Eq, DefaultBits)]
