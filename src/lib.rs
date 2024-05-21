@@ -7,7 +7,7 @@
 pub use addrlib::TileMode;
 use addrlib::{
     hwl_compute_surface_info, ComputeSurfaceAddrFromCoordInput, ComputeSurfaceInfoInput,
-    ComputeSurfaceInfoOutput,
+    ComputeSurfaceInfoOutput, SurfaceFlags,
 };
 
 mod addrlib;
@@ -305,8 +305,10 @@ pub struct Gx2Surface<'a> {
     pub width: u32,
     /// The height of the base mip level in pixels.
     pub height: u32,
-    /// The depth of the base mip level in pixels.
-    pub depth: u32,
+    /// The depth of the base mip level in pixels or the number of array layers.
+    /// Cube maps will have a value of 6.
+    /// 2D surfaces without any layers should use a value of 1.
+    pub depth_or_array_layers: u32,
     /// The number of mipmaps or 1 if there are no additional mipmaps.
     pub mipmap_count: u32,
     /// The format for the image data.
@@ -339,8 +341,6 @@ impl<'a> Gx2Surface<'a> {
         let (block_width, block_height) = self.format.block_dim();
         let bytes_per_pixel = self.format.bytes_per_pixel();
 
-        let div_round_up = |x, d| (x + d - 1) / d;
-
         let mut data = Vec::new();
         for mip in 0..self.mipmap_count {
             let source = if mip == 0 {
@@ -348,10 +348,19 @@ impl<'a> Gx2Surface<'a> {
                 self.image_data
             } else if mip == 1 {
                 // The slice already accounts for the mip 1 offset.
-                &self.mipmap_data[..self.mipmap_offsets[1] as usize]
+                let next_offset = self.mipmap_offsets[mip as usize] as usize;
+                if next_offset != 0 {
+                    &self.mipmap_data[..next_offset]
+                } else {
+                    &self.mipmap_data
+                }
             } else {
                 // Remaining mip levels are relative to the start of the mipmap data.
-                let offset = self.mipmap_offsets[mip as usize - 1] as usize;
+                let offset = if mip == 1 {
+                    0
+                } else {
+                    self.mipmap_offsets[mip as usize - 1] as usize
+                };
                 let next_offset = self.mipmap_offsets[mip as usize] as usize;
                 if next_offset != 0 {
                     &self.mipmap_data[offset..next_offset]
@@ -376,10 +385,30 @@ impl<'a> Gx2Surface<'a> {
                 num_samples: 1 << self.aa as u32,
                 width,
                 height,
-                num_slices: self.depth,
+                num_slices: self.depth_or_array_layers,
                 slice: 0,
                 mip_level: mip,
-                flags: Default::default(),
+                flags: SurfaceFlags::new(
+                    false,
+                    false,
+                    false,
+                    false,
+                    self.dim == SurfaceDim::Cube,
+                    self.dim == SurfaceDim::D3,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    0u8.into(),
+                ),
                 tile_info: Default::default(),
                 tile_type: addrlib::TileType::Displayable,
                 tile_index: 0,
@@ -389,7 +418,7 @@ impl<'a> Gx2Surface<'a> {
                 size: 0,
                 pitch: 0,
                 height: 0,
-                depth: self.depth,
+                depth: 0,
                 surf_size: 0,
                 tile_mode: self.tile_mode,
                 base_align: 0,
@@ -410,13 +439,16 @@ impl<'a> Gx2Surface<'a> {
             };
             hwl_compute_surface_info(&input, &mut output);
 
-            // TODO: Why does output.pitch not work?
-            let pitch = self.pitch >> mip;
+            // TODO: Why is output.pitch sometimes too large?
+            let pitch = output.pitch.min(self.pitch);
 
+            // TODO: is this data all layers for each mip?
+            // TODO: Store this as layer major instead of mip major to match dds?
+            // TODO: Should this be depth and also layers?
             let mip = deswizzle_mipmap(
                 width,
                 height,
-                self.depth,
+                self.depth_or_array_layers,
                 source,
                 self.swizzle,
                 pitch,
@@ -427,7 +459,63 @@ impl<'a> Gx2Surface<'a> {
             data.extend_from_slice(&mip);
         }
 
-        Ok(data)
+        if self.dim == SurfaceDim::Cube {
+            Ok(self.mip_major_to_layer_major(&data, block_width, block_height, bytes_per_pixel))
+        } else {
+            Ok(data)
+        }
+    }
+
+    fn mip_major_to_layer_major(
+        &self,
+        data: &Vec<u8>,
+        block_width: u32,
+        block_height: u32,
+        bytes_per_pixel: u32,
+    ) -> Vec<u8> {
+        // Convert from [mip][layer] to [layer][mip] ordering.
+        // TODO: Is there a better way of doing this?
+        let mut new_data = vec![0u8; data.len()];
+
+        let mut mip_offsets: Vec<_> = (0..self.mipmap_count - 1)
+            .map(|mip| {
+                let width = div_round_up(self.width >> mip, block_width);
+                let height = div_round_up(self.height >> mip, block_height);
+                width * height * bytes_per_pixel
+            })
+            .scan(0, |state, x| Some(*state + x))
+            .collect();
+        mip_offsets.insert(0, 0);
+
+        let output_layer_size = (0..self.mipmap_count)
+            .map(|mip| {
+                let width = div_round_up(self.width >> mip, block_width);
+                let height = div_round_up(self.height >> mip, block_height);
+                width * height * bytes_per_pixel
+            })
+            .sum::<u32>();
+
+        let mut mip_offset = 0;
+        for mip in 0..self.mipmap_count {
+            let width = div_round_up(self.width >> mip, block_width);
+            let height = div_round_up(self.height >> mip, block_height);
+            let mip_size = (width * height * bytes_per_pixel) as usize;
+
+            for layer in 0..6 {
+                let layer_offset = width * height * layer * bytes_per_pixel;
+                let input_offset = layer_offset as usize + mip_offset;
+                let mip_data = &data[input_offset..input_offset + mip_size];
+
+                let output_layer_offset = output_layer_size * layer;
+                let output_mip_offset = mip_offsets[mip as usize];
+                let output_offset = (output_layer_offset + output_mip_offset) as usize;
+
+                new_data[output_offset..output_offset + mip_size].copy_from_slice(mip_data);
+            }
+
+            mip_offset += mip_size * 6;
+        }
+        new_data
     }
 }
 
@@ -547,6 +635,10 @@ pub fn swizzle_mipmap(
     )?;
 
     Ok(output)
+}
+
+fn div_round_up(x: u32, d: u32) -> u32 {
+    (x + d - 1) / d
 }
 
 fn deswizzled_mipmap_size(
@@ -763,7 +855,7 @@ mod tests {
             dim: SurfaceDim::D2,
             width: 256,
             height: 256,
-            depth: 1,
+            depth_or_array_layers: 1,
             mipmap_count: 8,
             format: SurfaceFormat::Bc1Unorm,
             aa: AaMode::X1,
@@ -781,5 +873,28 @@ mod tests {
         assert_eq!(expected, &surface.deswizzle().unwrap()[..]);
     }
 
-    // TODO: Test cube maps
+    #[test]
+    fn deswizzle_surface_64x64_cube_bc1_mipmaps() {
+        let expected = include_bytes!("data/64x64_cube_bc1_tm4_p32_s67328_deswizzled.bin");
+        let swizzled = include_bytes!("data/64x64_cube_bc1_tm4_p32_s67328_swizzled.bin");
+
+        let surface = Gx2Surface {
+            dim: SurfaceDim::Cube,
+            width: 64,
+            height: 64,
+            depth_or_array_layers: 6,
+            mipmap_count: 2,
+            format: SurfaceFormat::Bc1Unorm,
+            aa: AaMode::X1,
+            usage: 1,
+            image_data: swizzled,
+            mipmap_data: &swizzled[24576..],
+            tile_mode: TileMode::D2TiledThin1,
+            swizzle: 67328,
+            alignment: 4096,
+            pitch: 32,
+            mipmap_offsets: [24576, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        };
+        assert_eq!(expected, &surface.deswizzle().unwrap()[..]);
+    }
 }
