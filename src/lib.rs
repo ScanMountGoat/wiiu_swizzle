@@ -4,11 +4,18 @@
 //!
 //! Most applications should construct a [Gx2Surface] and use [Gx2Surface::deswizzle]
 //! to correctly handle offsets and parameter changes for different mip levels.
+#![no_std]
+extern crate alloc;
+
+#[cfg(feature = "std")]
+extern crate std;
+
 pub use addrlib::TileMode;
 use addrlib::{
     hwl_compute_surface_info, ComputeSurfaceAddrFromCoordInput, ComputeSurfaceInfoInput,
     ComputeSurfaceInfoOutput, SurfaceFlags,
 };
+use alloc::{vec, vec::Vec};
 
 mod addrlib;
 
@@ -22,6 +29,7 @@ pub enum SwizzleError {
     },
 }
 
+#[cfg(feature = "std")]
 impl std::fmt::Display for SwizzleError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -37,6 +45,7 @@ impl std::fmt::Display for SwizzleError {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for SwizzleError {}
 
 // TODO: Use try into and avoid panic.

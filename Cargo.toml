@@ -11,3 +11,7 @@ edition = "2021"
 [dependencies]
 arbitrary = { version = "1", features = ["derive"], optional = true }
 bilge = "0.2.0"
+
+[features]
+default = ["std"]
+std = []

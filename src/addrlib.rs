@@ -744,7 +744,7 @@ fn compute_surface_alignments_macrotiled(
 
     let macro_tile_width = 8 * num_banks / aspect_ratio;
     let macro_tile_height = aspect_ratio * 8 * num_pipes;
-    *pitch_align = std::cmp::max(
+    *pitch_align = core::cmp::max(
         macro_tile_width,
         macro_tile_width * (group_bytes / bpp / (8 * thickness) / num_samples),
     );
@@ -758,12 +758,12 @@ fn compute_surface_alignments_macrotiled(
     }
 
     if thickness == 1 {
-        *base_align = std::cmp::max(
+        *base_align = core::cmp::max(
             macro_tile_bytes,
             bits_to_bytes(num_samples * *height_align * bpp * *pitch_align),
         );
     } else {
-        *base_align = std::cmp::max(
+        *base_align = core::cmp::max(
             group_bytes,
             bits_to_bytes(4 * *height_align * bpp * *pitch_align),
         );
@@ -995,7 +995,7 @@ fn compute_surface_bank_swapped_width(
     let samples_per_tile = split_size / bytes_per_sample;
 
     if (split_size / bytes_per_sample) != 0 {
-        slices_per_tile = std::cmp::max(1, num_samples / samples_per_tile);
+        slices_per_tile = core::cmp::max(1, num_samples / samples_per_tile);
     }
 
     let mut num_samples = num_samples;
@@ -1007,13 +1007,13 @@ fn compute_surface_bank_swapped_width(
 
     if is_bank_swapped_tile_mode(tile_mode) {
         let factor = compute_macro_tile_aspect_ratio(tile_mode);
-        let swap_tiles = std::cmp::max(1, (swap_size >> 1) / bpp);
+        let swap_tiles = core::cmp::max(1, (swap_size >> 1) / bpp);
         let swap_width = swap_tiles * 8 * num_banks;
         let height_bytes = num_samples * factor * num_pipes * bpp / slices_per_tile;
         let swap_max = num_pipes * num_banks * row_size / height_bytes;
         let swap_min = group_size * 8 * num_banks / bytes_per_tile_slice;
 
-        bank_swap_width = std::cmp::min(swap_max, std::cmp::max(swap_min, swap_width));
+        bank_swap_width = core::cmp::min(swap_max, core::cmp::max(swap_min, swap_width));
 
         while bank_swap_width >= 2 * pitch {
             bank_swap_width >>= 1;
@@ -1493,7 +1493,7 @@ fn compute_surface_addr_from_coord_macro_tiled(
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L1736
 pub fn dispatch_compute_surface_addrfrom_coord(p_in: &ComputeSurfaceAddrFromCoordInput) -> u32 {
-    let num_samples = std::cmp::max(1, p_in.num_samples);
+    let num_samples = core::cmp::max(1, p_in.num_samples);
 
     match p_in.tile_mode {
         TileMode::LinearGeneral | TileMode::LinearAligned => {
