@@ -61,13 +61,14 @@ macro_rules! c_enum {
             ),*
         }
 
-        impl From<u32> for $name {
-            fn from(value: u32) -> Self {
+        impl $name {
+            /// Returns the variant with the given value or `None` if unrecognized.
+            pub fn from_repr(value: u32) -> Option<Self> {
                 match value {
                     $(
-                        $value => Self::$variant,
+                        $value => Some(Self::$variant),
                     )*
-                    _ => panic!("No variant found for {value}")
+                    _ => None
                 }
             }
         }
