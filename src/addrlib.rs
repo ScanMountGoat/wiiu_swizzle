@@ -21,7 +21,7 @@ const MICRO_TILE_PIXELS: u32 = MICRO_TILE_WIDTH * MICRO_TILE_HEIGHT;
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/include/addrlib/addrtypes.h#L83
 c_enum! {
-    /// GX2TileMode
+    /// GX2TileMode affecting the tiled memory layout and size
     TileMode,
     /// ADDR_TM_LINEAR_GENERAL
     LinearGeneral = 0x0,
@@ -66,6 +66,7 @@ c_enum! {
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/include/addrlib/addrtypes.h#L230C1-L237C1
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TileType {
     /// ADDR_DISPLAYABLE
@@ -109,11 +110,11 @@ pub struct SurfaceFlags {
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/include/addrlib/addrinterface.h#L311
 #[derive(Default)]
 pub struct TileInfo {
-    banks: u32,
-    bank_width: u32,
-    bank_height: u32,
-    macro_aspect_ratio: u32,
-    tile_split_bytes: u32,
+    _banks: u32,
+    _bank_width: u32,
+    _bank_height: u32,
+    _macro_aspect_ratio: u32,
+    _tile_split_bytes: u32,
     // AddrPipeCfg pipeConfig;
 }
 
@@ -158,7 +159,7 @@ pub struct ComputeSurfaceInfoOutput {
     pub slice_tile_max: u32,
     pub tile_info: TileInfo,
     pub tile_type: TileType,
-    pub tile_index: i32, // ADDR_QBSTEREOINFO *pStereoInfo;
+    pub tile_index: i32,
 }
 
 // Modified to remove unused fields.
@@ -646,7 +647,7 @@ fn compute_surface_alignments_linear(
     pitch_align: &mut u32,
     height_align: &mut u32,
 ) -> bool {
-    let mut valid = true;
+    let valid = true;
 
     match tile_mode {
         TileMode::LinearGeneral => {
@@ -716,7 +717,7 @@ fn is_dual_base_align_needed(tile_mode: TileMode) -> bool {
 fn compute_surface_alignments_macrotiled(
     tile_mode: TileMode,
     bpp: u32,
-    flags: SurfaceFlags,
+    _flags: SurfaceFlags,
     num_samples: u32,
     base_align: &mut u32,
     pitch_align: &mut u32,
@@ -1148,7 +1149,6 @@ pub fn hwl_compute_surface_info(
     p_in: &ComputeSurfaceInfoInput,
     p_out: &mut ComputeSurfaceInfoOutput,
 ) {
-    let mut result;
     let num_samples = p_in.num_samples.max(1);
     let mut tile_mode = p_in.tile_mode;
     let mut pad_dims = 0;
@@ -1175,10 +1175,10 @@ pub fn hwl_compute_surface_info(
 
     match tile_mode {
         TileMode::LinearGeneral | TileMode::LinearAligned => {
-            result = compute_surface_info_linear(p_in, p_out, pad_dims, tile_mode);
+            compute_surface_info_linear(p_in, p_out, pad_dims, tile_mode);
         }
         TileMode::D1TiledThin1 | TileMode::D1TiledThick => {
-            result = compute_surface_info_micro_tiled(p_in, p_out, pad_dims, tile_mode);
+            compute_surface_info_micro_tiled(p_in, p_out, pad_dims, tile_mode);
         }
         TileMode::D2TiledThin1
         | TileMode::D2TiledThin2
@@ -1192,16 +1192,13 @@ pub fn hwl_compute_surface_info(
         | TileMode::D3TiledThick
         | TileMode::B3TiledThin1
         | TileMode::B3TiledThick => {
-            result =
-                compute_surface_info_macro_tiled(p_in, p_out, pad_dims, tile_mode, p_in.tile_mode);
+            compute_surface_info_macro_tiled(p_in, p_out, pad_dims, tile_mode, p_in.tile_mode);
         }
         _ => {
             // TODO: return type?
-            // result = ADDR_INVALIDPARAMS;
+            // ADDR_INVALIDPARAMS
         }
     }
-
-    // return result;
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/r600/r600addrlib.cpp#L1384

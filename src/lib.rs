@@ -49,9 +49,9 @@ impl std::fmt::Display for SwizzleError {
 impl std::error::Error for SwizzleError {}
 
 // TODO: Use try into and avoid panic.
-#[macro_export]
 macro_rules! c_enum {
     (#[$attr1:meta] $name:ident, $($(#[$attr2:meta])* $variant:ident=$value:expr),*,) => {
+        #[$attr1]
         #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
         pub enum $name {
@@ -62,7 +62,7 @@ macro_rules! c_enum {
         }
 
         impl $name {
-            /// Returns the variant with the given value or `None` if unrecognized.
+            /// Returns the variant with the given value or `None` if invalid.
             pub fn from_repr(value: u32) -> Option<Self> {
                 match value {
                     $(
@@ -74,6 +74,7 @@ macro_rules! c_enum {
         }
     };
 }
+pub(crate) use c_enum;
 
 // TODO: Include all gx2 enum variants?
 c_enum! {
@@ -88,7 +89,7 @@ c_enum! {
 // The GX2 and addrlib enums are the same.
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/include/addrlib/addrtypes.h#L118
 c_enum! {
-    /// GX2SurfaceFormat
+    /// GX2SurfaceFormat for the format of the image data
     SurfaceFormat,
     /// GX2_SURFACE_FORMAT_INVALID
     Invalid = 0x00000000,
@@ -288,7 +289,7 @@ impl SurfaceFormat {
 }
 
 c_enum! {
-    /// GX2SurfaceDim
+    /// GX2SurfaceDim for the dimensionality of the texture surface
     SurfaceDim,
     D1 = 0,
     D2 = 1,
@@ -362,7 +363,7 @@ impl<'a> Gx2Surface<'a> {
                 if next_offset != 0 {
                     &self.mipmap_data[..next_offset]
                 } else {
-                    &self.mipmap_data
+                    self.mipmap_data
                 }
             } else {
                 // Remaining mip levels are relative to the start of the mipmap data.
@@ -478,7 +479,7 @@ impl<'a> Gx2Surface<'a> {
 
     fn mip_major_to_layer_major(
         &self,
-        data: &Vec<u8>,
+        data: &[u8],
         block_width: u32,
         block_height: u32,
         bytes_per_pixel: u32,
