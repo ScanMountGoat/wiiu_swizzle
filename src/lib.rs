@@ -907,4 +907,28 @@ mod tests {
         };
         assert_eq!(expected, &surface.deswizzle().unwrap()[..]);
     }
+
+    #[test]
+    fn aa_mode_from_repr() {
+        assert_eq!(Some(AaMode::X2), AaMode::from_repr(1));
+        assert_eq!(None, AaMode::from_repr(0xff));
+    }
+
+    #[test]
+    fn surface_dim_from_repr() {
+        assert_eq!(Some(SurfaceDim::D2), SurfaceDim::from_repr(1));
+        assert_eq!(None, SurfaceDim::from_repr(0xff));
+    }
+
+    #[test]
+    fn surface_format_from_repr() {
+        assert_eq!(Some(SurfaceFormat::Bc5Unorm), SurfaceFormat::from_repr(53));
+        assert_eq!(None, SurfaceFormat::from_repr(0xff));
+    }
+
+    #[test]
+    fn tile_mode_from_repr() {
+        assert_eq!(Some(TileMode::D2TiledThin1), TileMode::from_repr(4));
+        assert_eq!(None, TileMode::from_repr(0xff));
+    }
 }
