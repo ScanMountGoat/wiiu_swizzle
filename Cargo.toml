@@ -1,6 +1,6 @@
 [package]
 name = "wiiu_swizzle"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["ScanMountGoat <>"]
 description = "Wii U texture memory tiling"
 license = "MIT"
