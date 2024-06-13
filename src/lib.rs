@@ -297,6 +297,7 @@ c_enum! {
     Cube = 3,
 }
 
+// TODO: impl Default?
 // TODO: How to handle array layers?
 // TODO: additional enums?
 // TODO: Show how to split a combined image buffer in docs
@@ -325,6 +326,7 @@ pub struct Gx2Surface<'a> {
     /// The format for the image data.
     /// Many texture binary file formats store the GX2 values directly.
     pub format: SurfaceFormat,
+    /// Used to calculate the sample count. Often set to [AaMode::X1].
     pub aa: AaMode,
     pub usage: u32,
     /// The image data for the base mipmap.
@@ -333,12 +335,13 @@ pub struct Gx2Surface<'a> {
     /// If there are no mipmaps, simply set this to an empty slice.
     pub mipmap_data: &'a [u8],
     pub tile_mode: TileMode,
+    /// Affects the upper bits of the swizzled address. Often set to 0.
     pub swizzle: u32,
     /// Usually `512 * bytes_per_pixel`.
     pub alignment: u32,
     /// Horizontal pitch that typically depends on [width](#structfield.width).
     pub pitch: u32,
-    /// The offsets for each mipmap base the base level starting with mip 1.
+    /// The offsets for each mipmap past the base level starting with mip 1.
     /// Mipmap offsets after mip 1 are relative to the mip 1 offset.
     ///
     /// Many texture binary file formats use this method of encoding offsets.
