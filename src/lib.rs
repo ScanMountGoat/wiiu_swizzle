@@ -378,6 +378,11 @@ impl<'a> Gx2Surface<'a> {
     pub fn deswizzle(&self) -> Result<Vec<u8>, SwizzleError> {
         // TODO: The compute info functions can also validate?
         self.validate()?;
+        // TODO: how to handle empty surfaces?
+        if self.width == 0 || self.height == 0 || self.depth_or_array_layers == 0 || self.pitch == 0
+        {
+            return Ok(Vec::new());
+        }
 
         let (block_width, block_height) = self.format.block_dim();
         let bytes_per_pixel = self.format.bytes_per_pixel();
@@ -574,7 +579,7 @@ impl<'a> Gx2Surface<'a> {
             .width
             .checked_mul(self.height)
             .and_then(|u| u.checked_mul(self.depth_or_array_layers))
-            .and_then(|u| u.checked_mul(self.format.bytes_per_pixel()))
+            .and_then(|u| u.checked_mul(self.format.bytes_per_pixel() * u8::BITS))
             .and_then(|u| u.checked_mul(self.pitch))
             .and_then(|u| u.checked_mul(1 << self.aa as u32))
             .is_none()
@@ -615,10 +620,12 @@ pub fn deswizzle_mipmap(
         * height as usize
         * depth_or_array_layers as usize
         * bytes_per_pixel as usize;
+    // TODO: How to handle zero sized inputs?
     if output_size == 0 {
         return Ok(Vec::new());
     }
 
+    // TODO: Why is this sometimes 0?
     let expected_size = swizzled_mipmap_size(
         width,
         height,
