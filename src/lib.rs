@@ -20,12 +20,28 @@ use alloc::{vec, vec::Vec};
 mod addrlib;
 
 /// Errors than can occur while converting between tiled and linear memory layouts.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum SwizzleError {
     /// The source data does not contain enough bytes.
     NotEnoughData {
         expected_size: usize,
         actual_size: usize,
+    },
+
+    /// The surface dimensions would overflow in size calculations.
+    InvalidSurface {
+        width: u32,
+        height: u32,
+        depth: u32,
+        format: SurfaceFormat,
+        mipmap_count: u32,
+    },
+
+    /// The mipmap offsets are out of bounds.
+    InvalidMipmapOffsets {
+        mipmap_offsets: [u32; 13],
+        image_data_len: usize,
+        mipmap_data_len: usize,
     },
 }
 
@@ -38,9 +54,20 @@ impl std::fmt::Display for SwizzleError {
                 actual_size,
             } => write!(
                 f,
-                "Not enough data. Expected {} bytes but found {} bytes.",
-                expected_size, actual_size
+                "Expected at least {expected_size} bytes but found {actual_size} bytes"
             ),
+            SwizzleError::InvalidSurface {
+                width,
+                height,
+                depth,
+                format,
+                mipmap_count,
+            } => write!(f, "Invalid surface dimensions {width}x{height}x{depth} format {format:?} and {mipmap_count} mipmaps"),
+            SwizzleError::InvalidMipmapOffsets {
+                mipmap_offsets,
+                image_data_len,
+                mipmap_data_len,
+            } => write!(f, "Mipmap offsets {mipmap_offsets:?} out of range for {image_data_len} bytes and {mipmap_data_len} mipmap bytes"),
         }
     }
 }
@@ -91,8 +118,6 @@ c_enum! {
 c_enum! {
     /// GX2SurfaceFormat for the format of the image data
     SurfaceFormat,
-    /// GX2_SURFACE_FORMAT_INVALID
-    Invalid = 0x00000000,
     /// GX2_SURFACE_FORMAT_TC_R8_UNORM
     R8Unorm = 0x00000001,
     /// GX2_SURFACE_FORMAT_TC_R8_UINT
@@ -227,7 +252,6 @@ impl SurfaceFormat {
     // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/core/addrelemlib.cpp#L139
     pub fn bytes_per_pixel(&self) -> u32 {
         match self {
-            SurfaceFormat::Invalid => 0,
             SurfaceFormat::R8Unorm => 1,
             SurfaceFormat::R8Uint => 1,
             SurfaceFormat::R8Snorm => 1,
@@ -352,6 +376,9 @@ pub struct Gx2Surface<'a> {
 impl<'a> Gx2Surface<'a> {
     /// Convert all layers and mipmaps from tiled to a combined linear vector.
     pub fn deswizzle(&self) -> Result<Vec<u8>, SwizzleError> {
+        // TODO: The compute info functions can also validate?
+        self.validate()?;
+
         let (block_width, block_height) = self.format.block_dim();
         let bytes_per_pixel = self.format.bytes_per_pixel();
 
@@ -491,7 +518,7 @@ impl<'a> Gx2Surface<'a> {
         // TODO: Is there a better way of doing this?
         let mut new_data = vec![0u8; data.len()];
 
-        let mut mip_offsets: Vec<_> = (0..self.mipmap_count - 1)
+        let mut mip_offsets: Vec<_> = (0..self.mipmap_count.saturating_sub(1))
             .map(|mip| {
                 let width = div_round_up(self.width >> mip, block_width);
                 let height = div_round_up(self.height >> mip, block_height);
@@ -530,6 +557,40 @@ impl<'a> Gx2Surface<'a> {
             mip_offset += mip_size * 6;
         }
         new_data
+    }
+
+    fn validate(&self) -> Result<(), SwizzleError> {
+        if self.mipmap_offsets[0] > self.image_data.len() as u32
+            || self.mipmap_offsets[1..]
+                .iter()
+                .any(|o| *o > self.mipmap_data.len() as u32)
+        {
+            Err(SwizzleError::InvalidMipmapOffsets {
+                mipmap_offsets: self.mipmap_offsets,
+                image_data_len: self.image_data.len(),
+                mipmap_data_len: self.mipmap_data.len(),
+            })
+        } else if self
+            .width
+            .checked_mul(self.height)
+            .and_then(|u| u.checked_mul(self.depth_or_array_layers))
+            .and_then(|u| u.checked_mul(self.format.bytes_per_pixel()))
+            .and_then(|u| u.checked_mul(self.pitch))
+            .and_then(|u| u.checked_mul(1 << self.aa as u32))
+            .is_none()
+            || self.mipmap_count > self.mipmap_offsets.len() as u32
+        {
+            // Check dimensions to prevent overflow.
+            Err(SwizzleError::InvalidSurface {
+                width: self.width,
+                height: self.height,
+                depth: self.depth_or_array_layers,
+                format: self.format,
+                mipmap_count: self.mipmap_count,
+            })
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -910,6 +971,37 @@ mod tests {
             mipmap_offsets: [24576, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         };
         assert_eq!(expected, &surface.deswizzle().unwrap()[..]);
+    }
+
+    #[test]
+    fn deswizzle_surface_overflow() {
+        let surface = Gx2Surface {
+            dim: SurfaceDim::Cube,
+            width: 65535,
+            height: 65535,
+            depth_or_array_layers: 65535,
+            mipmap_count: 1,
+            format: SurfaceFormat::Bc1Unorm,
+            aa: AaMode::X1,
+            usage: 1,
+            image_data: &[],
+            mipmap_data: &[],
+            tile_mode: TileMode::D2TiledThin1,
+            swizzle: 67328,
+            alignment: 4096,
+            pitch: 32,
+            mipmap_offsets: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        };
+        assert_eq!(
+            Err(SwizzleError::InvalidSurface {
+                width: 65535,
+                height: 65535,
+                depth: 65535,
+                format: SurfaceFormat::Bc1Unorm,
+                mipmap_count: 1
+            }),
+            surface.deswizzle()
+        );
     }
 
     #[test]
