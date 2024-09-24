@@ -1,5 +1,5 @@
 use crate::{c_enum, SurfaceFormat};
-use bilge::prelude::*;
+use bitflags::bitflags;
 
 // These are class member variables in addrlib.
 // Values taken from Cemu.
@@ -79,32 +79,30 @@ pub enum TileType {
     ThickTiling = 0x3,
 }
 
-// TODO: Construct this manually and avoid bilge dependency?
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/include/addrlib/addrinterface.h#L266
-#[bitsize(32)]
-#[derive(DebugBits, Clone, Copy, PartialEq, Eq, DefaultBits)]
-pub struct SurfaceFlags {
-    // TODO: bitfield?
-    color: bool,
-    depth: bool,
-    stencil: bool,
-    texture: bool,
-    cube: bool,
-    volume: bool,
-    fmask: bool,
-    cube_as_array: bool,
-    compress_z: bool,
-    linear_wa: bool,
-    overlay: bool,
-    no_stencil: bool,
-    input_base_map: bool,
-    display: bool,
-    opt4_space: bool,
-    prt: bool,
-    qb_stereo: bool,
-    pow2_pad: bool,
-    reserved: bool,
-    unused: u13,
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    pub struct SurfaceFlags: u32 {
+        const color = 1 << 0;
+        const depth = 1 << 1;
+        const stencil = 1 << 2;
+        const texture = 1 << 3;
+        const cube = 1 << 4;
+        const volume = 1 << 5;
+        const fmask = 1 << 6;
+        const cube_as_array = 1 << 7;
+        const compress_z = 1 << 8;
+        const linear_wa = 1 << 9;
+        const overlay = 1 << 10;
+        const no_stencil = 1 << 11;
+        const input_base_map = 1 << 12;
+        const display = 1 << 13;
+        const opt4_space = 1 << 14;
+        const prt = 1 << 15;
+        const qb_stereo = 1 << 16;
+        const pow2_pad = 1 << 17;
+        const reserved = 1 << 18;
+    }
 }
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/include/addrlib/addrinterface.h#L311
@@ -209,7 +207,7 @@ fn compute_surface_thickness(tile_mode: TileMode) -> u32 {
 
 // https://github.com/decaf-emu/addrlib/blob/194162c47469ce620dd2470eb767ff5e42f5954a/src/core/addrlib.cpp#L337
 fn adjust_pitch_alignment(flags: SurfaceFlags, pitch_align: &mut u32) {
-    if flags.display() {
+    if flags.contains(SurfaceFlags::display) {
         *pitch_align = pitch_align.next_multiple_of(32);
     }
 }
@@ -247,7 +245,7 @@ fn pad_dimensions(
     }
 
     if pad_dims > 2 || thickness > 1 {
-        if flags.cube() {
+        if flags.contains(SurfaceFlags::cube) {
             *slices = slices.next_power_of_two();
         }
 
@@ -817,7 +815,7 @@ fn compute_surface_info_linear(
         &mut p_out.height_align,
     );
 
-    if p_in.flags.linear_wa() && mip_level == 0 {
+    if p_in.flags.contains(SurfaceFlags::linear_wa) && mip_level == 0 {
         pitch = (pitch / 3).next_power_of_two();
     }
 
@@ -825,7 +823,7 @@ fn compute_surface_info_linear(
         pitch = pitch.next_power_of_two();
         height = height.next_power_of_two();
 
-        if p_in.flags.cube() {
+        if p_in.flags.contains(SurfaceFlags::cube) {
             if num_slices <= 1 {
                 pad_dims = 2;
             } else {
@@ -848,7 +846,7 @@ fn compute_surface_info_linear(
         micro_tile_thickness,
     );
 
-    if p_in.flags.linear_wa() && mip_level == 0 {
+    if p_in.flags.contains(SurfaceFlags::linear_wa) && mip_level == 0 {
         pitch *= 3;
     }
 
@@ -885,7 +883,7 @@ fn compute_surface_info_micro_tiled(
         pitch = pitch.next_power_of_two();
         height = height.next_power_of_two();
 
-        if p_in.flags.cube() {
+        if p_in.flags.contains(SurfaceFlags::cube) {
             if num_slices <= 1 {
                 pad_dims = 2;
             } else {
@@ -1049,7 +1047,7 @@ fn compute_surface_info_macro_tiled(
         pitch = pitch.next_power_of_two();
         height = height.next_power_of_two();
 
-        if p_in.flags.cube() {
+        if p_in.flags.contains(SurfaceFlags::cube) {
             if num_slices <= 1 {
                 pad_dims = 2;
             } else {
@@ -1104,7 +1102,11 @@ fn compute_surface_info_macro_tiled(
     let bank_swapped_width = compute_surface_bank_swapped_width(tile_mode, bpp, num_samples, pitch);
     pitch_align = pitch_align.max(bank_swapped_width);
 
-    if is_dual_pitch_align_needed(tile_mode, p_in.flags.depth(), mip_level) {
+    if is_dual_pitch_align_needed(
+        tile_mode,
+        p_in.flags.contains(SurfaceFlags::depth),
+        mip_level,
+    ) {
         let mut tile_per_group = (M_PIPE_INTERLEAVE_BYTES >> 3) / bpp / num_samples;
         tile_per_group = (tile_per_group / compute_surface_thickness(tile_mode)).max(1);
 
@@ -1153,11 +1155,11 @@ pub fn hwl_compute_surface_info(
     let mut tile_mode = p_in.tile_mode;
     let mut pad_dims = 0;
 
-    if p_in.flags.cube() && p_in.mip_level == 0 {
+    if p_in.flags.contains(SurfaceFlags::cube) && p_in.mip_level == 0 {
         pad_dims = 2;
     }
 
-    if p_in.flags.fmask() {
+    if p_in.flags.contains(SurfaceFlags::fmask) {
         tile_mode = convert_to_non_bank_swapped_mode(tile_mode);
     } else {
         tile_mode = compute_surface_mip_level_tile_mode(
@@ -1168,7 +1170,7 @@ pub fn hwl_compute_surface_info(
             p_in.height,
             p_in.num_slices,
             num_samples,
-            p_in.flags.depth(),
+            p_in.flags.contains(SurfaceFlags::depth),
             false,
         );
     }
