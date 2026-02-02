@@ -379,7 +379,11 @@ impl<'a> Gx2Surface<'a> {
         // TODO: The compute info functions can also validate?
         self.validate()?;
         // TODO: how to handle empty surfaces?
-        if self.width == 0 || self.height == 0 || self.depth_or_array_layers == 0 || self.pitch == 0
+        if self.width == 0
+            || self.height == 0
+            || self.depth_or_array_layers == 0
+            || self.pitch == 0
+            || self.mipmap_count == 0
         {
             return Ok(Vec::new());
         }
