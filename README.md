@@ -1,8 +1,8 @@
 # wiiu_swizzle 
+[![Latest Version](https://img.shields.io/crates/v/wiiu_swizzle.svg)](https://crates.io/crates/wiiu_swizzle) [![docs.rs](https://docs.rs/wiiu_swizzle/badge.svg)](https://docs.rs/wiiu_swizzle)
+
 <img src="https://raw.githubusercontent.com/ScanMountGoat/wiiu_swizzle/main/16x16x16_tiled.png" height="auto" width="100%">
 <img src="https://raw.githubusercontent.com/ScanMountGoat/wiiu_swizzle/main/16x16x16_linear.png" height="auto" width="100%">
-
-[![Latest Version](https://img.shields.io/crates/v/wiiu_swizzle.svg)](https://crates.io/crates/wiiu_swizzle) [![docs.rs](https://docs.rs/wiiu_swizzle/badge.svg)](https://docs.rs/wiiu_swizzle)
 
 A safe and efficient pure Rust implementation of texture memory tiling or "swizzling" for the Wii U. This library is still experimental and missing important features and bug fixes. This crate has an optional `"std"` feature that can be disabled for use with `no_std` environments supporting `alloc`.
 
