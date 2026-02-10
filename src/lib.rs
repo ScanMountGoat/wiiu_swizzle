@@ -565,26 +565,30 @@ impl<'a> Gx2Surface<'a> {
                 image_data_len: self.image_data.len(),
                 mipmap_data_len: self.mipmap_data.len(),
             })
-        } else if self
-            .width
-            .checked_mul(self.height)
-            .and_then(|u| u.checked_mul(self.depth_or_array_layers))
-            .and_then(|u| u.checked_mul(self.format.bytes_per_pixel() * u8::BITS))
-            .and_then(|u| u.checked_mul(self.pitch))
-            .and_then(|u| u.checked_mul(1 << self.aa as u32))
-            .is_none()
-            || self.mipmap_count > self.mipmap_offsets.len() as u32
-        {
-            // Check dimensions to prevent overflow.
-            Err(SwizzleError::InvalidSurface {
-                width: self.width,
-                height: self.height,
-                depth: self.depth_or_array_layers,
-                format: self.format,
-                mipmap_count: self.mipmap_count,
-            })
         } else {
-            Ok(())
+            // TODO: This won't catch all instances of overflow.
+            // TODO: Move overflow checks to the compute surface functions?
+            let value = self
+                .height
+                .checked_mul(self.depth_or_array_layers)
+                .and_then(|u| u.checked_mul(self.format.bytes_per_pixel() * u8::BITS))
+                .and_then(|u| u.checked_mul(1 << self.aa as u32));
+
+            if value.and_then(|u| u.checked_mul(self.width)).is_none()
+                || value.and_then(|u| u.checked_mul(self.pitch)).is_none()
+                || self.mipmap_count > self.mipmap_offsets.len() as u32
+            {
+                // Check dimensions to prevent overflow.
+                Err(SwizzleError::InvalidSurface {
+                    width: self.width,
+                    height: self.height,
+                    depth: self.depth_or_array_layers,
+                    format: self.format,
+                    mipmap_count: self.mipmap_count,
+                })
+            } else {
+                Ok(())
+            }
         }
     }
 }
