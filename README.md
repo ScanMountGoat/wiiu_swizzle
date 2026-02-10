@@ -1,8 +1,12 @@
 # wiiu_swizzle 
+<img src="https://raw.githubusercontent.com/ScanMountGoat/wiiu_swizzle/main/16x16x16_tiled.png" height="auto" width="100%">
+<img src="https://raw.githubusercontent.com/ScanMountGoat/wiiu_swizzle/main/16x16x16_linear.png" height="auto" width="100%">
 
 [![Latest Version](https://img.shields.io/crates/v/wiiu_swizzle.svg)](https://crates.io/crates/wiiu_swizzle) [![docs.rs](https://docs.rs/wiiu_swizzle/badge.svg)](https://docs.rs/wiiu_swizzle)
 
 A safe and efficient pure Rust implementation of texture memory tiling or "swizzling" for the Wii U. This library is still experimental and missing important features and bug fixes. This crate has an optional `"std"` feature that can be disabled for use with `no_std` environments supporting `alloc`.
+
+The above image shows a tiled RGBA 16x16x16 pixel 3D lut. The untiled or linear version is shown below.  
 
 ## Memory Tiling
 GPU textures are often stored in a tiled memory layout to make texture accesses more cache friendly. The standard linear or row-major memory ordering is only cache friendly when the data is accessed in row-major order. This is rarely the case for image textures for models, so the bytes of a surface are rearranged to improve the number of cache misses using some form of tiling algorithm.
