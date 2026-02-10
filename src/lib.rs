@@ -554,11 +554,12 @@ impl<'a> Gx2Surface<'a> {
     }
 
     fn validate(&self) -> Result<(), SwizzleError> {
-        if self.mipmap_offsets[0] > self.image_data.len() as u32
-            || self.mipmap_offsets[1..]
-                .iter()
-                .any(|o| *o > self.mipmap_data.len() as u32)
+        if self.mipmap_offsets[1..]
+            .iter()
+            .any(|o| *o > self.mipmap_data.len() as u32)
         {
+            // The mipmap offsets must be within the mipmap data.
+            // We can't validate offset 0 since the mipmap data should already be split.
             Err(SwizzleError::InvalidMipmapOffsets {
                 mipmap_offsets: self.mipmap_offsets,
                 image_data_len: self.image_data.len(),
