@@ -421,8 +421,8 @@ impl<'a> Gx2Surface<'a> {
 
             // TODO: How to handle dimensions not divisible by block dimensions?
             // TODO: cemu uses mipPtr & 0x700 for swizzle for mipmaps?
-            let width = div_round_up(self.width >> mip, block_width);
-            let height = div_round_up(self.height >> mip, block_height);
+            let width = mip_dimension(self.width, mip, block_width);
+            let height = mip_dimension(self.height, mip, block_height);
 
             // Some parameters change based on dimensions or mip level.
             // Small mips may use micro instead of macro tiling.
@@ -514,8 +514,8 @@ impl<'a> Gx2Surface<'a> {
 
         let mut mip_offsets: Vec<_> = (0..self.mipmap_count.saturating_sub(1))
             .map(|mip| {
-                let width = div_round_up(self.width >> mip, block_width);
-                let height = div_round_up(self.height >> mip, block_height);
+                let width = mip_dimension(self.width, mip, block_width);
+                let height = mip_dimension(self.height, mip, block_height);
                 width * height * bytes_per_pixel
             })
             .scan(0, |state, x| Some(*state + x))
@@ -524,16 +524,16 @@ impl<'a> Gx2Surface<'a> {
 
         let output_layer_size = (0..self.mipmap_count)
             .map(|mip| {
-                let width = div_round_up(self.width >> mip, block_width);
-                let height = div_round_up(self.height >> mip, block_height);
+                let width = mip_dimension(self.width, mip, block_width);
+                let height = mip_dimension(self.height, mip, block_height);
                 width * height * bytes_per_pixel
             })
             .sum::<u32>();
 
         let mut mip_offset = 0;
         for mip in 0..self.mipmap_count {
-            let width = div_round_up(self.width >> mip, block_width);
-            let height = div_round_up(self.height >> mip, block_height);
+            let width = mip_dimension(self.width, mip, block_width);
+            let height = mip_dimension(self.height, mip, block_height);
             let mip_size = (width * height * bytes_per_pixel) as usize;
 
             for layer in 0..6 {
@@ -711,6 +711,10 @@ pub fn swizzle_mipmap(
     )?;
 
     Ok(output)
+}
+
+fn mip_dimension(dim: u32, mip: u32, block_dim: u32) -> u32 {
+    div_round_up((dim >> mip).max(1), block_dim)
 }
 
 fn div_round_up(x: u32, d: u32) -> u32 {
@@ -951,8 +955,8 @@ mod tests {
 
     #[test]
     fn deswizzle_surface_64x64_cube_bc1_mipmaps() {
-        let expected = include_bytes!("data/64x64_cube_bc1_tm4_p32_s67328_deswizzled.bin");
-        let swizzled = include_bytes!("data/64x64_cube_bc1_tm4_p32_s67328_swizzled.bin");
+        let expected = include_bytes!("data/64x64_cube_bc1_tm4_p32_s67328_mips2_deswizzled.bin");
+        let swizzled = include_bytes!("data/64x64_cube_bc1_tm4_p32_s67328_mips2_swizzled.bin");
 
         let surface = Gx2Surface {
             dim: SurfaceDim::Cube,
@@ -970,6 +974,33 @@ mod tests {
             alignment: 4096,
             pitch: 32,
             mipmap_offsets: [24576, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        };
+        assert_eq!(expected, &surface.deswizzle().unwrap()[..]);
+    }
+
+    #[test]
+    fn deswizzle_surface_1024x256_bc3_mipmaps() {
+        let expected = include_bytes!("data/1024x256_bc3_tm4_p256_s197888_mips11_deswizzled.bin");
+        let swizzled = include_bytes!("data/1024x256_bc3_tm4_p256_s197888_mips11_swizzled.bin");
+
+        let surface = Gx2Surface {
+            dim: SurfaceDim::D2,
+            width: 1024,
+            height: 256,
+            depth_or_array_layers: 1,
+            mipmap_count: 11,
+            format: SurfaceFormat::Bc3Unorm,
+            aa: AaMode::X1,
+            usage: 1,
+            image_data: swizzled,
+            mipmap_data: &swizzled[262144..],
+            tile_mode: TileMode::D2TiledThin1,
+            swizzle: 197888,
+            alignment: 4096,
+            pitch: 256,
+            mipmap_offsets: [
+                262144, 65536, 83200, 87296, 89344, 90368, 91392, 92416, 93440, 94464, 0, 0, 0,
+            ],
         };
         assert_eq!(expected, &surface.deswizzle().unwrap()[..]);
     }
